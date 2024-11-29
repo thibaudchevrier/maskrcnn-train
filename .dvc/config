@@ -1,0 +1,4 @@
+[core]
+    remote = myremote
+['remote "myremote"']
+    url = gdrive://1JQNGq5d1GiA8lC_GA-N5v3iQc1X9vHaK/jedha_final_project
