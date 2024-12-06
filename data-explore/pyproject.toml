@@ -1,0 +1,13 @@
+[tool.poetry]
+package-mode = false
+name = "data-explore"
+
+[tool.poetry.dependencies]
+python = "^3.13"
+dvc = "*"
+opencv-python = "*"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
