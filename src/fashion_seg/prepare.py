@@ -10,7 +10,7 @@ Run through DVC: ``uv run dvc repro --single-item prepare``.
 import json
 from pathlib import Path
 
-import pandas as pd
+import polars as pl
 import yaml
 from fashion_seg_core import annotations
 from sklearn.model_selection import KFold
@@ -35,13 +35,15 @@ def main() -> None:
     output_dir = Path(paths["prepared_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    masks = pd.read_csv(
-        paths["train_csv"], usecols=["ImageId", "EncodedPixels", "Height", "Width", "ClassId"]
+    masks = pl.read_csv(
+        paths["train_csv"],
+        columns=["ImageId", "EncodedPixels", "Height", "Width", "ClassId"],
+        schema_overrides={"ImageId": pl.String, "ClassId": pl.Int64},
     )
     per_image = annotations.group_by_image(masks)
-    per_image.to_parquet(output_dir / "annotations.parquet", index=False)
+    per_image.write_parquet(output_dir / "annotations.parquet")
 
-    ids = per_image["image_id"].tolist()
+    ids = per_image["image_id"].to_list()
     result = split_image_ids(ids, split["n_folds"], split["fold"], split["seed"])
     (output_dir / "split.json").write_text(
         json.dumps({"params": split, **result}) + "\n", encoding="utf-8"

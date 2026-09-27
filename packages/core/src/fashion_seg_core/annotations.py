@@ -11,34 +11,42 @@ image, sorted by ``image_id``, and stores it as Parquet so every trainer loads i
 import json
 from pathlib import Path
 
-import pandas as pd
+import polars as pl
 
 COLUMNS = ["image_id", "height", "width", "class_ids", "rles"]
 
 
-def group_by_image(masks: pd.DataFrame) -> pd.DataFrame:
-    """``train.csv`` rows (one per mask) -> one row per image, sorted by ``image_id``."""
-    grouped = (
-        masks.groupby("ImageId", sort=True)
+def group_by_image(masks: pl.DataFrame) -> pl.DataFrame:
+    """``train.csv`` rows (one per mask) -> one row per image, sorted by ``image_id``.
+
+    Masks keep their file order within each image.
+    """
+    return (
+        masks.group_by("ImageId", maintain_order=True)
         .agg(
-            height=("Height", "first"),
-            width=("Width", "first"),
-            class_ids=("ClassId", list),
-            rles=("EncodedPixels", list),
+            pl.col("Height").first().alias("height"),
+            pl.col("Width").first().alias("width"),
+            pl.col("ClassId").alias("class_ids"),
+            pl.col("EncodedPixels").alias("rles"),
         )
-        .reset_index()
-        .rename(columns={"ImageId": "image_id"})
+        .rename({"ImageId": "image_id"})
+        .with_columns(pl.col("image_id").cast(pl.String))
+        .sort("image_id")
+        .select(COLUMNS)
     )
-    grouped["image_id"] = grouped["image_id"].astype(str)
-    return grouped[COLUMNS]
 
 
-def load(path: str | Path, image_ids: list[str] | None = None) -> pd.DataFrame:
+def load(path: str | Path, image_ids: list[str] | None = None) -> pl.DataFrame:
     """Read the prepared annotations, optionally restricted to ``image_ids`` (in that order)."""
-    frame = pd.read_parquet(path)
+    frame = pl.read_parquet(path)
     if image_ids is None:
         return frame
-    return frame.set_index("image_id").loc[image_ids].reset_index()
+    order = pl.DataFrame({"image_id": image_ids})
+    selected = order.join(frame, on="image_id", how="left", maintain_order="left")
+    missing = selected.filter(pl.col("height").is_null())["image_id"].to_list()
+    if missing:
+        raise KeyError(f"{len(missing)} image ids not in {path}, e.g. {missing[:3]}")
+    return selected
 
 
 def load_split(path: str | Path) -> dict[str, list[str]]:

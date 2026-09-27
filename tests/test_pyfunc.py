@@ -6,7 +6,6 @@ from pathlib import Path
 
 import jsonschema
 import numpy as np
-import pandas as pd
 import pytest
 from fashion_seg_core import rle
 from PIL import Image
@@ -34,8 +33,9 @@ class FakePredictor:
         )
 
 
-def _request(image: np.ndarray) -> pd.DataFrame:
-    return pd.DataFrame({"image": [encode_image(image)]})
+def _request(image: np.ndarray) -> dict[str, list[str]]:
+    # Same column access as the pandas DataFrame MLflow passes when serving.
+    return {"image": [encode_image(image)]}
 
 
 def test_predict_formats_instances_and_filters_by_score():
