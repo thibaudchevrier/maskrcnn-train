@@ -7,8 +7,7 @@ requires-python = ">=3.10"
 # TensorFlow 2.21 / PyTorch (numpy 2.x). mlflow must match across envs (shared mlflow.db).
 dependencies = [
     "numpy>=1.23",
-    "pandas>=2.0",
-    "pyarrow>=14",
+    "polars>=1.20",
     "mlflow>=3.16,<3.17",
 ]
 

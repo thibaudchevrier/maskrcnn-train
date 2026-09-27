@@ -20,7 +20,7 @@ from typing import Any, Protocol
 
 import mlflow.pyfunc
 import numpy as np
-import pandas as pd
+import pandas as pd  # MLflow's pyfunc interface: predict() receives a pandas DataFrame
 from fashion_seg_core import rle
 from fashion_seg_core.labels import load_class_names
 from PIL import Image, ImageOps
@@ -94,6 +94,10 @@ class FashionSegmentationModel(mlflow.pyfunc.PythonModel):  # pylint: disable=ab
         model_input: pd.DataFrame,
         params: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
+        """One result per row of ``model_input[IMAGE_COLUMN]`` (base64 images).
+
+        Only column access is used, so a plain ``{"image": [...]}`` dict works too (tests).
+        """
         min_score = float((params or {}).get("min_score", DEFAULT_MIN_SCORE))
         results = []
         for payload in model_input[IMAGE_COLUMN]:

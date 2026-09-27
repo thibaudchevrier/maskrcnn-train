@@ -18,7 +18,6 @@ from typing import Any
 
 import keras  # Keras 2.15, the same package as tf.keras in TensorFlow 2.15
 import mlflow
-import pandas as pd
 import tensorflow as tf
 import yaml
 from fashion_seg_core import annotations
@@ -118,11 +117,11 @@ def build_datasets(
             f"No training/validation images found in {image_dir}: run `uv run dvc pull data.dvc` "
             "(or `make pull-sample` for --smoke)."
         )
-    records = annotations.load(Path(data["prepared_dir"]) / "annotations.parquet")
+    prepared = Path(data["prepared_dir"]) / "annotations.parquet"
     class_names = load_class_names(data["label_file"])
     return (
-        FashionDataset(_subset(records, train_ids), image_dir, class_names),
-        FashionDataset(_subset(records, val_ids), image_dir, class_names),
+        FashionDataset(annotations.load(prepared, train_ids), image_dir, class_names),
+        FashionDataset(annotations.load(prepared, val_ids), image_dir, class_names),
         class_names,
     )
 
@@ -205,10 +204,6 @@ def main(argv: list[str] | None = None) -> None:
         if not args.smoke:
             mlflow.log_artifacts(str(export_dir), artifact_path="model")
         print(f"Trained {params['epochs']} epoch(s); inference model exported to {export_dir}")
-
-
-def _subset(records: pd.DataFrame, image_ids: list[str]) -> pd.DataFrame:
-    return records.set_index("image_id").loc[image_ids].reset_index()
 
 
 def _export_inference_model(

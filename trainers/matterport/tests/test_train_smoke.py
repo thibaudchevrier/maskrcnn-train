@@ -3,7 +3,7 @@
 import json
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import yaml
 from fashion_seg_core import rle
 from fashion_seg_matterport import train
@@ -32,7 +32,7 @@ def _write_dataset(root):
         )
     prepared = root / "prepared"
     prepared.mkdir()
-    pd.DataFrame(rows).to_parquet(prepared / "annotations.parquet")
+    pl.DataFrame(rows).write_parquet(prepared / "annotations.parquet")
     (prepared / "split.json").write_text(
         json.dumps({"train": ["img0", "img1", "img2"], "val": ["img3"]})
     )
@@ -43,7 +43,7 @@ def _write_dataset(root):
 
 def test_dataset_maps_categories_to_model_classes(tmp_path):
     image_dir, prepared, _ = _write_dataset(tmp_path)
-    records = pd.read_parquet(prepared / "annotations.parquet")
+    records = pl.read_parquet(prepared / "annotations.parquet")
     names = ["BG"] + [f"c{k}" for k in range(46)]
     dataset = FashionDataset(records, image_dir, names)
     masks, class_ids = dataset.load_mask(0)

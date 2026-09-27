@@ -14,13 +14,13 @@ stages:
       nfiles: 4
     - path: packages/core/src/fashion_seg_core
       hash: md5
-      md5: 59de9d974e396c0aca305980d1486661.dir
-      size: 4545
+      md5: 2d1f4d654d68475fbdf82665fdefddf8.dir
+      size: 4915
       nfiles: 5
     - path: src/fashion_seg
       hash: md5
-      md5: 06633221bfc460a1d3193ae5698b3902.dir
-      size: 20231
+      md5: b542cc046ca9701818563bb52219a1b1.dir
+      size: 20528
       nfiles: 7
     params:
       params.yaml:
@@ -33,8 +33,8 @@ stages:
     outs:
     - path: models/fashion-maskrcnn
       hash: md5
-      md5: b68a096810d754f52f2998f48ded52b7.dir
-      size: 266098831
+      md5: c2a62d0fc72cc9699170affb8bed731a.dir
+      size: 266103113
       nfiles: 28
   prepare:
     cmd: python -m fashion_seg.prepare
@@ -45,12 +45,12 @@ stages:
       size: 1437924420
     - path: packages/core/src/fashion_seg_core/annotations.py
       hash: md5
-      md5: 47623ca9bf6e998098bc12d3ebfe1f8a
-      size: 1756
+      md5: c5a1ae3ce10b73c7280d358fda9e7a1c
+      size: 2126
     - path: src/fashion_seg/prepare.py
       hash: md5
-      md5: 8f3b5de3424d81dcaa3a4bdae5a81c28
-      size: 2177
+      md5: 7589b4caad85a642504062fe167384d5
+      size: 2247
     params:
       params.yaml:
         data.prepared_dir: prepared
@@ -62,6 +62,6 @@ stages:
     outs:
     - path: prepared
       hash: md5
-      md5: 76118b5ad7a332de8272685e4f64fc71.dir
-      size: 968504286
+      md5: d3b65f71823b250f9188c1ab309085c4.dir
+      size: 587736028
       nfiles: 2

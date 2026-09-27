@@ -1,4 +1,4 @@
-import pandas as pd
+import polars as pl
 import pytest
 from fashion_seg_core import annotations
 
@@ -6,7 +6,7 @@ from fashion_seg.prepare import split_image_ids
 
 
 def test_group_by_image_sorts_and_collects_masks():
-    masks = pd.DataFrame(
+    masks = pl.DataFrame(
         {
             "ImageId": ["b", "a", "b"],
             "EncodedPixels": ["1 2", "3 4", "5 6"],
@@ -16,8 +16,8 @@ def test_group_by_image_sorts_and_collects_masks():
         }
     )
     grouped = annotations.group_by_image(masks)
-    assert grouped["image_id"].tolist() == ["a", "b"]
-    row = grouped.iloc[1]
+    assert grouped["image_id"].to_list() == ["a", "b"]
+    row = grouped.row(1, named=True)
     assert (row["height"], row["width"]) == (10, 11)
     assert list(row["class_ids"]) == [3, 7] and list(row["rles"]) == ["1 2", "5 6"]
 
@@ -37,7 +37,7 @@ def test_split_rejects_unknown_fold():
 
 
 def test_load_restricts_to_ids_in_order(tmp_path):
-    frame = pd.DataFrame(
+    frame = pl.DataFrame(
         {
             "image_id": ["a", "b", "c"],
             "height": [1, 2, 3],
@@ -46,6 +46,8 @@ def test_load_restricts_to_ids_in_order(tmp_path):
             "rles": [["1 1"], ["1 1"], ["1 1"]],
         }
     )
-    frame.to_parquet(tmp_path / "annotations.parquet")
+    frame.write_parquet(tmp_path / "annotations.parquet")
     loaded = annotations.load(tmp_path / "annotations.parquet", ["c", "a"])
-    assert loaded["image_id"].tolist() == ["c", "a"]
+    assert loaded["image_id"].to_list() == ["c", "a"]
+    with pytest.raises(KeyError):
+        annotations.load(tmp_path / "annotations.parquet", ["zz"])

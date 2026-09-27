@@ -15,7 +15,6 @@ from pathlib import Path
 import fashion_seg_core
 import mlflow
 import numpy as np
-import pandas as pd
 import yaml
 from fashion_seg_core.tracking import setup_experiment
 from mlflow.models import ModelSignature
@@ -47,11 +46,11 @@ def pip_requirements() -> list[str]:
     ]
 
 
-def input_example() -> pd.DataFrame:
+def input_example() -> dict[str, list[str]]:
     """Small random image used by MLflow to validate the model and document the input."""
     rng = np.random.default_rng(0)
     image = rng.integers(0, 255, size=(64, 48, 3), dtype=np.uint8)
-    return pd.DataFrame({IMAGE_COLUMN: [encode_image(image)]})
+    return {IMAGE_COLUMN: [encode_image(image)]}
 
 
 def main() -> None:
