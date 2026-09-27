@@ -11,7 +11,19 @@ SOURCE = "fashion"
 
 
 class FashionDataset(utils.Dataset):
-    """Images are read lazily from ``image_dir``; masks are decoded from their RLE on demand."""
+    """Prepared iMaterialist annotations exposed as a Matterport ``utils.Dataset``.
+
+    Images are read lazily from ``image_dir``; masks are decoded from their RLE on demand.
+
+    Parameters
+    ----------
+    records : pl.DataFrame
+        Prepared annotations (see ``fashion_seg_core.annotations``) of the images to include.
+    image_dir : str | Path
+        Directory of the ``<image_id>.jpg`` files.
+    class_names : list[str]
+        Class names indexed by model class id (0 = background).
+    """
 
     def __init__(self, records: pl.DataFrame, image_dir: str | Path, class_names: list[str]):
         super().__init__()
@@ -31,11 +43,34 @@ class FashionDataset(utils.Dataset):
         self.prepare()
 
     def load_mask(self, image_id: int) -> tuple[np.ndarray, np.ndarray]:
-        """[H, W, N] bool masks and their [N] model class ids."""
+        """Decode the instance masks of an image.
+
+        Parameters
+        ----------
+        image_id : int
+            Internal image index of the dataset (not the iMaterialist image id).
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]
+            ``[height, width, N]`` bool masks and their ``[N]`` model class ids (category + 1).
+        """
         info = self.image_info[image_id]
         height, width = info["height"], info["width"]
         masks = np.stack([rle.decode(r, height, width) for r in info["rles"]], axis=-1)
         return masks, np.array([c + 1 for c in info["categories"]], dtype=np.int32)
 
     def image_reference(self, image_id: int) -> str:
+        """Locate the file of an image, for debugging and visualization.
+
+        Parameters
+        ----------
+        image_id : int
+            Internal image index of the dataset.
+
+        Returns
+        -------
+        str
+            Path of the image file.
+        """
         return self.image_info[image_id]["path"]

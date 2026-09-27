@@ -1,3 +1,5 @@
+"""Tests of the MLflow serving wrapper, with a fake predictor and, if pulled, the 2021 model."""
+
 import base64
 import io
 import os
@@ -15,7 +17,10 @@ CLASS_NAMES = ["BG", "shirt", "pants"]
 
 
 class FakePredictor:
+    """Predictor returning two fixed detections, sized to the image."""
+
     def predict(self, image):
+        """Return a shirt (top-left) and pants (bottom-right) with fixed scores."""
         h, w = image.shape[:2]
         masks = np.zeros((h, w, 2), dtype=bool)
         masks[:5, :5, 0] = True
@@ -30,10 +35,12 @@ class FakePredictor:
 
 def _request(image: np.ndarray) -> dict[str, list[str]]:
     # Same column access as the pandas DataFrame MLflow passes when serving.
+    """Build a request with one image, as MLflow passes it (column access only)."""
     return {"image": [encode_image(image)]}
 
 
 def test_predict_formats_instances_and_filters_by_score():
+    """Responses follow the contract, carry labels and decoded masks, and honour min_score."""
     model = FashionSegmentationModel(FakePredictor(), CLASS_NAMES)
     image = np.zeros((20, 10, 3), np.uint8)
 
@@ -49,6 +56,7 @@ def test_predict_formats_instances_and_filters_by_score():
 
 
 def test_decode_image_handles_grayscale_and_raw_bytes():
+    """Grayscale images become RGB; raw bytes and base64 are both accepted."""
     buffer = io.BytesIO()
     Image.new("L", (8, 6)).save(buffer, format="JPEG")
     assert decode_image(buffer.getvalue()).shape == (6, 8, 3)
@@ -60,6 +68,8 @@ SAVED_MODEL = Path(os.environ.get("FASHION_SEG_SAVED_MODEL", "deployement"))
 
 @pytest.mark.skipif(not (SAVED_MODEL / "saved_model.pb").exists(), reason="legacy model not pulled")
 def test_real_saved_model_runs():
+    """The 2021 model (deployement/) runs end to end and follows the contract."""
+    # pylint: disable-next=import-outside-toplevel  # TensorFlow loads only when the model is pulled
     from fashion_seg.predictors.matterport import MatterportPredictor
 
     model = FashionSegmentationModel(MatterportPredictor(SAVED_MODEL), ["BG"] + ["c"] * 46)

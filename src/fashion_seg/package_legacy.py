@@ -15,7 +15,6 @@ from pathlib import Path
 import mlflow
 import numpy as np
 import yaml
-from fashion_seg_core.tracking import setup_experiment
 from mlflow.models import ModelSignature
 from mlflow.types import ColSpec, ParamSchema, ParamSpec, Schema
 
@@ -26,6 +25,7 @@ from fashion_seg.serving.pyfunc import (
     FashionSegmentationModel,
     encode_image,
 )
+from fashion_seg_core.tracking import setup_experiment
 
 # The model ships its own copy of the code it imports at load time.
 # Our own serving code ships inside the model; released packages are requirements.
@@ -41,10 +41,15 @@ SIGNATURE = ModelSignature(
 
 
 def pip_requirements() -> list[str]:
-    """Runtime requirements of the model, pinned to exactly what was used to package it.
+    """List the model's runtime requirements, pinned to what was used to package it.
 
     Released packages are pinned to the wheel URL they were installed from (``pyproject.toml``
     ``[tool.uv.sources]``), as they would be from a package registry.
+
+    Returns
+    -------
+    list[str]
+        pip requirement lines.
     """
     pinned = [f"{pkg}=={version(pkg)}" for pkg in PINNED]
     released = [f"{pkg} @ {_installed_from(pkg)}" for pkg in RELEASED]
@@ -52,6 +57,23 @@ def pip_requirements() -> list[str]:
 
 
 def _installed_from(package: str) -> str:
+    """Find the URL a package was installed from.
+
+    Parameters
+    ----------
+    package : str
+        Distribution name.
+
+    Returns
+    -------
+    str
+        The URL recorded in the package's ``direct_url.json``.
+
+    Raises
+    ------
+    RuntimeError
+        If the package was not installed from a URL.
+    """
     direct_url = distribution(package).read_text("direct_url.json")
     if not direct_url:
         raise RuntimeError(f"{package} was not installed from a URL: check [tool.uv.sources]")
@@ -59,14 +81,20 @@ def _installed_from(package: str) -> str:
 
 
 def input_example() -> dict[str, list[str]]:
-    """Small random image used by MLflow to validate the model and document the input."""
+    """Build a small random image request, used by MLflow to validate the model and document it.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        One base64 PNG under the ``image`` column.
+    """
     rng = np.random.default_rng(0)
     image = rng.integers(0, 255, size=(64, 48, 3), dtype=np.uint8)
     return {IMAGE_COLUMN: [encode_image(image)]}
 
 
 def main() -> None:
-    """Log, register and export the legacy model as configured in ``params.yaml``."""
+    """Log, register and export the 2021 model as configured in ``params.yaml``."""
     params = yaml.safe_load(Path("params.yaml").read_text(encoding="utf-8"))["legacy_model"]
     saved_model = Path(params["saved_model_dir"])
     labels = Path(params["label_file"])

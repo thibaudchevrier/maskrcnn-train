@@ -17,9 +17,19 @@ COLUMNS = ["image_id", "height", "width", "class_ids", "rles"]
 
 
 def group_by_image(masks: pl.DataFrame) -> pl.DataFrame:
-    """``train.csv`` rows (one per mask) -> one row per image, sorted by ``image_id``.
+    """Group ``train.csv`` rows (one per mask) into one row per image.
 
     Masks keep their file order within each image.
+
+    Parameters
+    ----------
+    masks : pl.DataFrame
+        ``train.csv`` columns ``ImageId``, ``EncodedPixels``, ``Height``, ``Width``, ``ClassId``.
+
+    Returns
+    -------
+    pl.DataFrame
+        One row per image with the ``COLUMNS`` of this module, sorted by ``image_id``.
     """
     return (
         masks.group_by("ImageId", maintain_order=True)
@@ -37,7 +47,25 @@ def group_by_image(masks: pl.DataFrame) -> pl.DataFrame:
 
 
 def load(path: str | Path, image_ids: list[str] | None = None) -> pl.DataFrame:
-    """Read the prepared annotations, optionally restricted to ``image_ids`` (in that order)."""
+    """Read the prepared annotations, optionally restricted to some images.
+
+    Parameters
+    ----------
+    path : str | Path
+        Path of ``annotations.parquet``.
+    image_ids : list[str] | None
+        Images to keep, in the order to return them. By default ``None``: every image.
+
+    Returns
+    -------
+    pl.DataFrame
+        One row per image with the ``COLUMNS`` of this module.
+
+    Raises
+    ------
+    KeyError
+        If some of ``image_ids`` are not in the annotations.
+    """
     frame = pl.read_parquet(path)
     if image_ids is None:
         return frame
@@ -50,6 +78,17 @@ def load(path: str | Path, image_ids: list[str] | None = None) -> pl.DataFrame:
 
 
 def load_split(path: str | Path) -> dict[str, list[str]]:
-    """Read ``split.json``: ``{"train": [...], "val": [...]}`` image ids."""
+    """Read the frozen train/val split.
+
+    Parameters
+    ----------
+    path : str | Path
+        Path of ``split.json``.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Image ids under ``"train"`` and ``"val"``.
+    """
     split = json.loads(Path(path).read_text(encoding="utf-8"))
     return {"train": split["train"], "val": split["val"]}

@@ -21,11 +21,11 @@ import mlflow
 import tensorflow as tf
 import yaml
 from fashion_seg_contract.labels import load_class_names
-from fashion_seg_core import annotations
-from fashion_seg_core.tracking import setup_experiment
 from mrcnn import config as mconfig
 from mrcnn import model as modellib
 
+from fashion_seg_core import annotations
+from fashion_seg_core.tracking import setup_experiment
 from fashion_seg_matterport.dataset import FashionDataset
 
 # Layers re-initialised when starting from COCO: they depend on the number of classes.
@@ -47,14 +47,30 @@ SMOKE_OVERRIDES = {
 
 
 class MlflowEpochLogger(keras.callbacks.Callback):
-    """Log every Keras epoch metric (losses, val losses) to the active MLflow run."""
+    """Keras callback logging every epoch metric (losses, validation losses) to MLflow.
 
-    def __init__(self):
+    Attributes
+    ----------
+    last_logs : dict[str, float]
+        Metrics of the last finished epoch.
+    """
+
+    last_logs: dict[str, float]
+
+    def __init__(self) -> None:
         super().__init__()
-        self.last_logs: dict[str, float] = {}
+        self.last_logs = {}
 
-    def on_epoch_end(self, epoch, logs=None):
-        """Called by Keras after each epoch with the train and validation losses."""
+    def on_epoch_end(self, epoch: int, logs: dict[str, float] | None = None) -> None:
+        """Log the epoch's metrics to the active MLflow run.
+
+        Parameters
+        ----------
+        epoch : int
+            0-based epoch index (logged as step ``epoch + 1``).
+        logs : dict[str, float] | None
+            Metrics computed by Keras for the epoch. By default ``None``.
+        """
         self.last_logs = {key: float(value) for key, value in (logs or {}).items()}
         mlflow.log_metrics(self.last_logs, step=epoch + 1)
 
@@ -66,7 +82,26 @@ def build_config(
     *,
     inference: bool = False,
 ) -> mconfig.Config:
-    """Matterport ``Config`` from ``params.yaml``; inference uses the same anchors as training."""
+    """Build the Matterport ``Config`` from the ``train_matterport`` parameters.
+
+    Inference uses the training anchors, unlike the 2021 export (see the README's roadmap).
+
+    Parameters
+    ----------
+    params : dict[str, Any]
+        The ``train_matterport`` section of ``params.yaml``.
+    num_classes : int
+        Number of classes, background included.
+    batch_steps : tuple[int, int]
+        Training and validation steps per epoch.
+    inference : bool
+        Build the inference configuration (one image per batch). By default ``False``.
+
+    Returns
+    -------
+    mconfig.Config
+        The configuration.
+    """
     steps_per_epoch, validation_steps = batch_steps
     attrs = {
         "NAME": "fashion",
@@ -87,14 +122,47 @@ def build_config(
 
 
 def select_ids(ids: list[str], limit: int | None, image_dir: Path, local_only: bool) -> list[str]:
-    """Apply ``max_*_images``; in smoke mode keep only images present on disk."""
+    """Apply ``max_*_images``; in smoke mode keep only images present on disk.
+
+    Parameters
+    ----------
+    ids : list[str]
+        Image ids of the split.
+    limit : int | None
+        Maximum number of images, ``None`` for all.
+    image_dir : Path
+        Directory of the ``<image_id>.jpg`` files.
+    local_only : bool
+        Keep only the images that exist in ``image_dir``.
+
+    Returns
+    -------
+    list[str]
+        The selected image ids, in split order.
+    """
     if local_only:
         ids = [i for i in ids if (image_dir / f"{i}.jpg").exists()]
     return ids[:limit] if limit else ids
 
 
-def load_params(params_file: str, smoke: bool) -> tuple[dict, dict, dict, Path]:
-    """``(data, split, train_matterport)`` sections and the output dir, with smoke overrides."""
+def load_params(
+    params_file: str, smoke: bool
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], Path]:
+    """Read the parameters, applying the smoke overrides if requested.
+
+    Parameters
+    ----------
+    params_file : str
+        Path of ``params.yaml``.
+    smoke : bool
+        Replace the training parameters with ``SMOKE_OVERRIDES``.
+
+    Returns
+    -------
+    tuple[dict[str, Any], dict[str, Any], dict[str, Any], Path]
+        The ``data``, ``split`` and ``train_matterport`` sections, and the output directory
+        (``<output_dir>-smoke`` in smoke mode).
+    """
     all_params = yaml.safe_load(Path(params_file).read_text(encoding="utf-8"))
     params = dict(all_params["train_matterport"])
     output_dir = Path(params["output_dir"])
@@ -105,9 +173,29 @@ def load_params(params_file: str, smoke: bool) -> tuple[dict, dict, dict, Path]:
 
 
 def build_datasets(
-    data: dict, params: dict, smoke: bool
+    data: dict[str, Any], params: dict[str, Any], smoke: bool
 ) -> tuple[FashionDataset, FashionDataset, list[str]]:
-    """Train/val datasets from the prepared annotations and the frozen split."""
+    """Build the train and validation datasets from the prepared annotations and the split.
+
+    Parameters
+    ----------
+    data : dict[str, Any]
+        The ``data`` section of ``params.yaml``.
+    params : dict[str, Any]
+        The ``train_matterport`` section of ``params.yaml``.
+    smoke : bool
+        Keep only the images present on disk.
+
+    Returns
+    -------
+    tuple[FashionDataset, FashionDataset, list[str]]
+        Training set, validation set, and class names indexed by model class id.
+
+    Raises
+    ------
+    SystemExit
+        If no training or validation image is available.
+    """
     image_dir = Path(data["train_images"])
     split = annotations.load_split(Path(data["prepared_dir"]) / "split.json")
     train_ids = select_ids(split["train"], params["max_train_images"], image_dir, smoke)
@@ -127,13 +215,37 @@ def build_datasets(
 
 
 def train_and_export(
-    params: dict,
+    params: dict[str, Any],
     datasets: tuple[FashionDataset, FashionDataset],
     num_classes: int,
     output_dir: Path,
     smoke: bool,
 ) -> Path:
-    """Train in the active MLflow run; write ``model/`` and ``metrics.json`` to ``output_dir``."""
+    """Train in the active MLflow run, then write ``model/`` and ``metrics.json``.
+
+    Parameters
+    ----------
+    params : dict[str, Any]
+        The ``train_matterport`` section of ``params.yaml``.
+    datasets : tuple[FashionDataset, FashionDataset]
+        Training and validation sets.
+    num_classes : int
+        Number of classes, background included.
+    output_dir : Path
+        Where to write checkpoints, the exported model and the metrics.
+    smoke : bool
+        Allow training without the COCO weights.
+
+    Returns
+    -------
+    Path
+        The export directory (``config.json`` + SavedModel).
+
+    Raises
+    ------
+    SystemExit
+        If the COCO weights are missing outside smoke mode.
+    """
     train_set, val_set = datasets
     batch = params["images_per_gpu"]
     steps = (
@@ -170,7 +282,13 @@ def train_and_export(
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Train, log to MLflow, export the inference model and final metrics."""
+    """Train, log to MLflow, and export the inference model and the final metrics.
+
+    Parameters
+    ----------
+    argv : list[str] | None
+        Command-line arguments, ``sys.argv[1:]`` when ``None``. By default ``None``.
+    """
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--params", default="params.yaml")
     parser.add_argument("--smoke", action="store_true", help="tiny run on locally pulled images")
@@ -209,6 +327,19 @@ def main(argv: list[str] | None = None) -> None:
 def _export_inference_model(
     params: dict[str, Any], num_classes: int, checkpoint: str, export_dir: Path
 ) -> None:
+    """Export a checkpoint as an inference model (``config.json`` + SavedModel).
+
+    Parameters
+    ----------
+    params : dict[str, Any]
+        The ``train_matterport`` section of ``params.yaml``.
+    num_classes : int
+        Number of classes, background included.
+    checkpoint : str
+        Path of the ``.h5`` weights to export.
+    export_dir : Path
+        Directory to (re)create with the export.
+    """
     config = build_config(params, num_classes, (1, 1), inference=True)
     inference = modellib.MaskRCNN(
         mode="inference", config=config, model_dir=str(export_dir.parent / "checkpoints")

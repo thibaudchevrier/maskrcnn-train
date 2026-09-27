@@ -5,6 +5,7 @@ pre/post-processing is maskrcnn-matterport's own (``mrcnn.serving``), so this on
 """
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 from mrcnn.serving import SavedModelPredictor
@@ -13,14 +14,38 @@ from fashion_seg.predictors.base import Detections
 
 
 class MatterportPredictor:
-    """Runs an exported Matterport model on single RGB images."""
+    """Runs an exported Matterport model (``config.json`` + TF SavedModel) on single RGB images.
+
+    Parameters
+    ----------
+    model_dir : str | Path
+        Export directory, as written by ``MaskRCNN.save`` (e.g. ``deployement/``).
+
+    Attributes
+    ----------
+    config : SimpleNamespace
+        The exported model configuration (``config.json``).
+    """
+
+    config: SimpleNamespace
 
     def __init__(self, model_dir: str | Path):
         self._model = SavedModelPredictor(str(model_dir))
         self.config = self._model.config
 
     def predict(self, image: np.ndarray) -> Detections:
-        """image: [H, W, 3] uint8 RGB."""
+        """Detect the garments in one image.
+
+        Parameters
+        ----------
+        image : np.ndarray
+            RGB image, shape ``(height, width, 3)``, uint8.
+
+        Returns
+        -------
+        Detections
+            The detections, in the image's pixel coordinates.
+        """
         result = self._model.detect(image)
         return Detections(
             boxes=result["rois"].astype(np.int32),

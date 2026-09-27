@@ -1,11 +1,14 @@
+"""Tests of the prepare stage: per-image annotations and the frozen split."""
+
 import polars as pl
 import pytest
-from fashion_seg_core import annotations
 
 from fashion_seg.prepare import split_image_ids
+from fashion_seg_core import annotations
 
 
 def test_group_by_image_sorts_and_collects_masks():
+    """Masks are grouped per image, images sorted by id, masks kept in file order."""
     masks = pl.DataFrame(
         {
             "ImageId": ["b", "a", "b"],
@@ -23,6 +26,7 @@ def test_group_by_image_sorts_and_collects_masks():
 
 
 def test_split_is_deterministic_disjoint_and_complete():
+    """The split is reproducible, and train and val partition the images."""
     ids = [f"{i:04d}" for i in range(100)]
     first = split_image_ids(ids, n_folds=8, fold=0, seed=42)
     assert first == split_image_ids(ids, n_folds=8, fold=0, seed=42)
@@ -32,11 +36,13 @@ def test_split_is_deterministic_disjoint_and_complete():
 
 
 def test_split_rejects_unknown_fold():
+    """Asking for a fold beyond n_folds fails."""
     with pytest.raises(ValueError):
         split_image_ids(["a", "b", "c"], n_folds=3, fold=3, seed=0)
 
 
 def test_load_restricts_to_ids_in_order(tmp_path):
+    """Loading a subset keeps the requested order and rejects unknown ids."""
     frame = pl.DataFrame(
         {
             "image_id": ["a", "b", "c"],
