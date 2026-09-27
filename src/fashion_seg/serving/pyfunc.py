@@ -10,7 +10,7 @@ Response: one entry per input image::
         {"class_id": 1, "label": "shirt, blouse", "score": 0.97,
          "box": [y1, x1, y2, x2], "mask_rle": "12 3 40 5 ..."}]}
 
-Masks use the same RLE as the iMaterialist annotations (see ``fashion_seg.rle``),
+Masks use the same RLE as the iMaterialist annotations (see ``fashion_seg_core.rle``),
 relative to the image after EXIF orientation is applied.
 """
 
@@ -21,10 +21,10 @@ from typing import Any, Protocol
 import mlflow.pyfunc
 import numpy as np
 import pandas as pd
+from fashion_seg_core import rle
+from fashion_seg_core.labels import load_class_names
 from PIL import Image, ImageOps
 
-from fashion_seg import rle
-from fashion_seg.labels import load_class_names
 from fashion_seg.legacy.matterport import Detections
 
 IMAGE_COLUMN = "image"

@@ -12,10 +12,12 @@ import shutil
 from importlib.metadata import version
 from pathlib import Path
 
+import fashion_seg_core
 import mlflow
 import numpy as np
 import pandas as pd
 import yaml
+from fashion_seg_core.tracking import setup_experiment
 from mlflow.models import ModelSignature
 from mlflow.types import ColSpec, ParamSchema, ParamSpec, Schema
 
@@ -26,9 +28,9 @@ from fashion_seg.serving.pyfunc import (
     FashionSegmentationModel,
     encode_image,
 )
-from fashion_seg.tracking import setup_experiment
 
-CODE_PATH = Path(fashion_seg.__file__).parent
+# The model ships its own copy of the code it imports at load time.
+CODE_PATHS = [str(Path(pkg.__file__).parent) for pkg in (fashion_seg, fashion_seg_core)]
 LOGGED_CONFIG_KEYS = ("BACKBONE", "NUM_CLASSES", "IMAGE_MAX_DIM", "DETECTION_MIN_CONFIDENCE")
 
 SIGNATURE = ModelSignature(
@@ -62,7 +64,7 @@ def main() -> None:
     model_kwargs = {
         "python_model": FashionSegmentationModel(),
         "artifacts": {"saved_model": str(saved_model), "labels": str(labels)},
-        "code_paths": [str(CODE_PATH)],
+        "code_paths": CODE_PATHS,
         "pip_requirements": pip_requirements(),
         "signature": SIGNATURE,
         "input_example": input_example(),

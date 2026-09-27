@@ -8,9 +8,9 @@ import jsonschema
 import numpy as np
 import pandas as pd
 import pytest
+from fashion_seg_core import rle
 from PIL import Image
 
-from fashion_seg import rle
 from fashion_seg.legacy.matterport import Detections
 from fashion_seg.serving.pyfunc import FashionSegmentationModel, decode_image, encode_image
 

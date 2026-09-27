@@ -12,11 +12,16 @@ stages:
       md5: d2814262190bed9dfca1b3ab6b925c2c.dir
       size: 265710486
       nfiles: 4
+    - path: packages/core/src/fashion_seg_core
+      hash: md5
+      md5: 59de9d974e396c0aca305980d1486661.dir
+      size: 4545
+      nfiles: 5
     - path: src/fashion_seg
       hash: md5
-      md5: f072df8596249dd276d30e3e77f4ebd7.dir
-      size: 20609
-      nfiles: 9
+      md5: 06633221bfc460a1d3193ae5698b3902.dir
+      size: 20231
+      nfiles: 7
     params:
       params.yaml:
         legacy_model:
@@ -28,6 +33,35 @@ stages:
     outs:
     - path: models/fashion-maskrcnn
       hash: md5
-      md5: 0c62b94447f12ffd62cf8f7e8f96a97d.dir
-      size: 266093773
-      nfiles: 25
+      md5: b68a096810d754f52f2998f48ded52b7.dir
+      size: 266098831
+      nfiles: 28
+  prepare:
+    cmd: python -m fashion_seg.prepare
+    deps:
+    - path: data/imaterialist/train.csv
+      hash: md5
+      md5: 7eaec314eed2d95c363ecb81f4475bb6
+      size: 1437924420
+    - path: packages/core/src/fashion_seg_core/annotations.py
+      hash: md5
+      md5: 47623ca9bf6e998098bc12d3ebfe1f8a
+      size: 1756
+    - path: src/fashion_seg/prepare.py
+      hash: md5
+      md5: 8f3b5de3424d81dcaa3a4bdae5a81c28
+      size: 2177
+    params:
+      params.yaml:
+        data.prepared_dir: prepared
+        data.train_csv: data/imaterialist/train.csv
+        split:
+          n_folds: 8
+          fold: 0
+          seed: 42
+    outs:
+    - path: prepared
+      hash: md5
+      md5: 76118b5ad7a332de8272685e4f64fc71.dir
+      size: 968504286
+      nfiles: 2
