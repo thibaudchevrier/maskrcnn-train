@@ -1,0 +1,13 @@
+md5: 25568092a1eafec39ef53106a74e8f94
+frozen: true
+deps:
+- checksum: '"0x8D9B8EA6FDBD661"'
+  size: 257557808
+  hash: md5
+  path: 
+    https://github.com/matterport/Mask_RCNN/releases/download/v2.0/mask_rcnn_coco.h5
+outs:
+- md5: e98aaff6f99e307b5e2a8a3ff741a518
+  size: 257557808
+  hash: md5
+  path: mask_rcnn_coco.h5

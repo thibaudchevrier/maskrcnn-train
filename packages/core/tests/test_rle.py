@@ -1,6 +1,5 @@
 import numpy as np
-
-from fashion_seg import rle
+from fashion_seg_core import rle
 
 
 def test_decode_is_one_indexed_column_major():

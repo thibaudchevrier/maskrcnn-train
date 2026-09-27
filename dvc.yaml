@@ -1,10 +1,44 @@
 stages:
+  prepare:
+    cmd: python -m fashion_seg.prepare
+    deps:
+      - ${data.train_csv}
+      - src/fashion_seg/prepare.py
+      - packages/core/src/fashion_seg_core/annotations.py
+    params:
+      - data.train_csv
+      - data.prepared_dir
+      - split
+    outs:
+      - ${data.prepared_dir}
+
+  train_matterport:
+    cmd: uv run --project trainers/matterport --locked python -m fashion_seg_matterport.train
+    deps:
+      - ${data.prepared_dir}
+      - ${data.train_images}
+      - ${data.label_file}
+      - ${train_matterport.init_weights}
+      - trainers/matterport/src
+      - trainers/matterport/uv.lock
+      - packages/core/src/fashion_seg_core
+    params:
+      - data
+      - split
+      - train_matterport
+    outs:
+      - ${train_matterport.output_dir}/model
+    metrics:
+      - ${train_matterport.output_dir}/metrics.json:
+          cache: false
+
   package_legacy:
     cmd: python -m fashion_seg.package_legacy
     deps:
       - ${legacy_model.saved_model_dir}
       - ${legacy_model.label_file}
       - src/fashion_seg
+      - packages/core/src/fashion_seg_core
     params:
       - legacy_model
     outs:

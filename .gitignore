@@ -3,6 +3,10 @@
 /deployement
 /mlruns
 
+# Training scratch: checkpoints and smoke runs (outputs/*/model is DVC-tracked)
+/outputs/*/checkpoints
+/outputs/*-smoke
+
 # Local MLflow tracking (experiments are logged here, the chosen model is exported to DVC)
 /mlflow.db
 /mlartifacts
@@ -15,3 +19,4 @@ __pycache__/
 .ruff_cache/
 
 .DS_Store
+/prepared

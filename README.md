@@ -1,63 +1,87 @@
 # fashion-seg-train
 
-Fashion instance segmentation: detect and segment the clothes in a photo (Mask R-CNN,
-[iMaterialist 2019](https://www.kaggle.com/c/imaterialist-fashion-2019-FGVC6), 46 categories).
+Fashion instance segmentation: detect and segment the clothes in a photo
+([iMaterialist-Fashion 2020](https://www.kaggle.com/c/imaterialist-fashion-2020-fgvc7), 46 categories).
 
-This repository owns **data, experiments and model packaging**. It publishes a
-self-contained MLflow model that
-[fashion-serving](https://github.com/thibaudchevrier/fashion-serving) imports and serves.
+This repository is **where every model is trained**: it owns the data, the shared train/val split,
+one trainer per model family, experiment tracking, and the packaging of the chosen model into a
+self-contained MLflow model that [fashion-serving](https://github.com/thibaudchevrier/fashion-serving)
+imports and serves.
 
 ## How it fits together
 
 ```
-                      fashion-seg-train (this repo)                            fashion-serving
- ┌──────────────┐   dvc pull   ┌──────────────────────────────┐
- │ Google Drive │ ───────────► │ data/          deployement/  │
- │ (DVC remote) │              │   (images,       (2021 TF     │
- │              │              │   annotations)   weights)     │
- │              │              └──────────────┬───────────────┘
- │              │                             │ dvc repro
- │              │                             ▼
- │              │              ┌──────────────────────────────┐   logs run,
- │              │              │ package stage                │── registers ──► MLflow (local)
- │              │              │ weights + code + labels      │   version
- │              │              │ → MLflow pyfunc model        │
- │              │   dvc push   └──────────────┬───────────────┘
- │              │ ◄──────────── models/fashion-maskrcnn        dvc import     ┌───────────────────────┐
- │              │ ──────────────────────────────────────────────────────────► │ mlflow models serve   │
- └──────────────┘                (git: dvc.lock pins the exact version)       │ + Flask upload webapp │
-                                                                              └───────────────────────┘
+ Google Drive (DVC remote)                     fashion-seg-train (this repo)
+ ┌──────────────────┐  dvc pull  ┌─────────┐   ┌──────────────────────────┐   ┌──────────────┐
+ │ data/ (images,   │ ─────────► │ prepare │──►│ train_<model>            │──►│ package      │
+ │  train.csv)      │            │ + split │   │ (one per model family,   │   │ MLflow pyfunc│
+ │ weights/ (COCO)  │ ─────────────────────────►│  own environment)        │   │ + contract   │
+ │ deployement/     │            └─────────┘   └────────────┬─────────────┘   └──────┬───────┘
+ │ (2021 model)     │ ─────────────────────────────────────────────────────────────►  │
+ │                  │                                        │ losses, params         │
+ │                  │                                        ▼                        ▼
+ │                  │                                 MLflow (local mlflow.db)  models/fashion-maskrcnn
+ │                  │ ◄──────────────────────── dvc push ─────────────────────────────┘
+ └──────────────────┘                                            │ dvc import (pinned commit)
+                                                                 ▼
+                                                   fashion-serving: mlflow models serve + webapp
 ```
 
 | Tool | Role |
 |------|------|
 | **git** | Code, `params.yaml`, `dvc.yaml`, and small pointer files (`*.dvc`, `dvc.lock`) holding the hashes of the large files |
-| **DVC** | Stores large files on Google Drive, runs the pipeline, and transports the packaged model to fashion-serving |
-| **MLflow** | Experiment tracking and model registry (local), and the model package format (`MLmodel` + code + pinned requirements) |
-| **uv** | Python environment and dependencies (`pyproject.toml`, `uv.lock`) |
+| **DVC** | Stores large files on Google Drive, runs the pipeline stages, transports the packaged model to fashion-serving |
+| **MLflow** | Experiment tracking (params, per-epoch losses) and model registry, all local; the model package format |
+| **uv** | One environment per purpose: orchestration (Python 3.12) and one per trainer (e.g. Python 3.11 + TF 2.15) |
 
-### What is in the repository
+### Repository layout
 
 | Path | Content | Stored in |
 |------|---------|-----------|
-| `src/fashion_seg/` | Source code: RLE codec, labels, Mask R-CNN pre/post-processing, MLflow wrapper, packaging script | git |
+| `packages/core/` | `fashion-seg-core`: RLE codec, labels, per-image annotations, MLflow setup. Light dependencies, installed in every environment | git |
+| `src/fashion_seg/` | Orchestration (Python 3.12): `prepare` stage, packaging, the MLflow serving wrapper, the legacy Matterport predictor | git |
+| `trainers/matterport/` | Matterport Mask R-CNN trainer: its own uv project (Python 3.11, TensorFlow 2.15, [maskrcnn-matterport](https://github.com/thibaudchevrier/maskrcnn-matterport-tf2) `v0.2.0`) | git |
 | `data/` | iMaterialist images + `train.csv` + `label_descriptions.json` (~23.7 GB, 48k files) | DVC (`data.dvc`) |
-| `deployement/` | 2021 Matterport Mask R-CNN weights (TF SavedModel + `config.json`) | DVC (`deployement.dvc`) |
-| `mlruns/` | Archive: a Nov 2024 MLflow 1.30 log of the same 2021 weights (no params or metrics) | DVC (`mlruns.dvc`) |
-| `models/fashion-maskrcnn/` | **Build output**: the packaged MLflow model consumed by fashion-serving | DVC (`dvc.lock`) |
+| `prepared/` | `annotations.parquet` (one row per image) + `split.json` (frozen train/val ids) | DVC (`prepare` stage) |
+| `weights/mask_rcnn_coco.h5` | COCO starting weights, imported from Matterport's release | DVC (`import-url`) |
+| `outputs/<model>/` | Trained model (`model/`: `config.json` + SavedModel) and `metrics.json` | DVC (`train_<model>` stage) |
+| `deployement/` | 2021 Matterport model (TF SavedModel + `config.json`) | DVC (`deployement.dvc`) |
+| `models/fashion-maskrcnn/` | **Build output**: the packaged MLflow model consumed by fashion-serving | DVC (`package_legacy` stage) |
 | `contracts/prediction.schema.json` | JSON Schema of the model's response, shared with fashion-serving | git |
+| `mlruns/` | Archive: a Nov 2024 MLflow 1.30 log of the 2021 weights (no params or metrics) | DVC (`mlruns.dvc`) |
 | `mlflow.db`, `mlartifacts/` | Local MLflow tracking store | not versioned |
 
-The model in `models/` is the 2021 model re-packaged, not retrained: TensorFlow 2.21 still loads the
-SavedModel, and the Matterport pre/post-processing was ported to numpy
-(`src/fashion_seg/legacy/matterport.py`). Retraining comes next (see [Roadmap](#roadmap)).
+The deployed model is still the 2021 one, re-packaged: TensorFlow 2.21 loads its SavedModel, with the
+Matterport pre/post-processing ported to numpy (`src/fashion_seg/legacy/matterport.py`). Models
+trained here are exported in the same format, so they are packaged and served the same way.
+
+## Pipeline
+
+```
+data/imaterialist/train.csv ─► prepare ─► prepared/ ─┐
+data/imaterialist/train/ ────────────────────────────┼─► train_matterport ─► outputs/matterport/
+weights/mask_rcnn_coco.h5 ───────────────────────────┘
+deployement/ + labels ──────────────────────────────────► package_legacy ──► models/fashion-maskrcnn/
+```
+
+| Stage | Environment | What it does |
+|-------|-------------|--------------|
+| `prepare` | orchestration | Groups `train.csv` (333k masks) into one row per image, and writes the frozen split: images sorted by id, `KFold(8, shuffle, seed 42)`, fold 0 = validation (39,920 train / 5,703 val), the procedure of the 2021 notebook |
+| `train_matterport` | `trainers/matterport` | Starts from COCO weights, trains with the 2021 notebook's settings (`params.yaml:train_matterport`), logs every epoch's losses to the MLflow experiment `fashion-seg-training`, exports the inference model and `metrics.json` |
+| `package_legacy` | orchestration | Wraps the 2021 model as an MLflow pyfunc model, registers a new `fashion-maskrcnn` version, writes `models/fashion-maskrcnn/` |
+
+Each stage re-runs only when its inputs (files, code, `params.yaml` section) changed since `dvc.lock`.
+
+> **Always target a stage** (`dvc repro --single-item <stage>`) unless the whole `data/` folder is
+> pulled. A plain `dvc repro` also re-checks `data.dvc` and, with a partial pull, would re-record the
+> dataset as only the files present locally. If that happens: `git checkout data.dvc`.
 
 ## One-time setup
 
-**1. Install the environment** (Python 3.12, TensorFlow, MLflow, DVC):
+**1. Install the environments:**
 
 ```bash
-uv sync
+make install     # orchestration env (.venv) + Matterport trainer env (trainers/matterport/.venv)
 ```
 
 **2. Give DVC access to Google Drive.** Google blocks DVC's shared OAuth app, so use your own:
@@ -75,53 +99,40 @@ uv sync
    ```
 
 5. Run any `dvc pull`: a browser opens. Google warns that the app is unverified (it's yours):
-   **Advanced → Go to … → Continue**. The token is then cached in `~/Library/Caches/pydrive2fs/`.
+   **Advanced → Go to … → Continue**. The token is cached in `~/Library/Caches/pydrive2fs/`. While
+   the app is in *Testing*, Google expires it after 7 days: the browser step then comes back.
 
 **3. Pull what you need:**
 
-```bash
-uv run dvc pull deployement.dvc                              # 2021 weights (~265 MB)
-uv run dvc pull data/imaterialist/label_descriptions.json    # labels only: enough to package the model
-uv run dvc pull data.dvc                                     # full dataset (~23.7 GB, slow on Drive)
-```
+| Goal | Command | Size |
+|------|---------|------|
+| Package / serve the 2021 model | `uv run dvc pull deployement.dvc data/imaterialist/label_descriptions.json` | ~265 MB |
+| Smoke-train on a few images | `uv run dvc pull prepare weights/mask_rcnn_coco.h5.dvc data/imaterialist/label_descriptions.json && make pull-sample` | ~1.2 GB |
+| Full training | `uv run dvc pull data.dvc prepare weights/mask_rcnn_coco.h5.dvc` | ~25 GB (slow on Drive) |
 
 ## Workflow
 
-### 1. Change something
-
-Code in `src/fashion_seg/`, settings in `params.yaml`, or data/weights (then `uv run dvc add <path>`).
-
-### 2. Check quality
+### Train a model
 
 ```bash
-make format   # ruff format + autofix
-make check    # ruff, pylint, pytest (the real-model test runs when deployement/ is pulled)
+# quick end-to-end check on the sample images (~1 min, logged as run "matterport-smoke")
+make train-matterport-smoke
+
+# real training: needs the full dataset. On CPU this takes days; use a GPU machine
+uv run dvc repro --single-item train_matterport
 ```
 
-### 3. Rebuild the model
+Tune by editing `params.yaml:train_matterport` (epochs, learning rate, layers, image size...), or
+without editing it: `uv run dvc exp run --single-item train_matterport -S train_matterport.learning_rate=0.001`.
+Compare in MLflow (`make mlflow-ui`) and with `uv run dvc metrics show`.
+
+### Package and publish
 
 ```bash
-uv run dvc repro --single-item package_legacy
-```
-
-DVC compares the stage inputs (`deployement/`, the labels file, `src/fashion_seg/`,
-`params.yaml:legacy_model`) with the hashes in `dvc.lock`:
-
-- **nothing changed** → the stage is skipped;
-- **something changed** → it runs `python -m fashion_seg.package_legacy`, which logs an MLflow run,
-  registers a new `fashion-maskrcnn` version, rewrites `models/fashion-maskrcnn/` (with a
-  `provenance.json` pointing back to the MLflow run), and updates `dvc.lock`.
-
-> Use `--single-item` unless the whole `data/` folder is pulled. A plain `dvc repro` also re-checks
-> `data.dvc` and, with a partial pull, would re-record the dataset as only the files present
-> locally. If that happens: `git checkout data.dvc`.
-
-### 4. Publish
-
-```bash
-uv run dvc push                       # upload new data/model files to Google Drive
-git add -A && git commit -m "..."     # dvc.lock pins exactly which model version was built
-git push                              # open a PR; CI checks lint, tests, contract, dvc.lock freshness
+uv run dvc repro --single-item package_legacy   # re-packages only if its inputs changed
+make check                                      # ruff, pylint, all tests
+uv run dvc push                                 # upload new outputs to Google Drive
+git add -A && git commit -m "..." && git push   # open a PR; CI checks lint, tests, dvc.lock freshness
 ```
 
 After the merge, deploy it in fashion-serving with `dvc update` (see its README).
@@ -129,29 +140,37 @@ After the merge, deploy it in fashion-serving with `dvc update` (see its README)
 ### Browse experiments
 
 ```bash
-make mlflow-ui            # http://localhost:5002: runs and registered model versions
+make mlflow-ui    # http://localhost:5002 (Ctrl+C to stop; MLFLOW_PORT=... to change the port)
 ```
 
-Stop with Ctrl+C. Change the port with `make mlflow-ui MLFLOW_PORT=5010`. The defaults avoid 5000
-(AirPlay on macOS) and 5001 (fashion-serving's inference service).
+- **Experiments → `fashion-seg-training`**: one run per training, tagged `model_family`, with all
+  params, per-epoch losses (train and validation) and, for real runs, the exported model.
+- **Experiments → `fashion-maskrcnn`**: one run per packaging.
+- **Models → `fashion-maskrcnn`**: registered versions. The packaged one is recorded in
+  `models/fashion-maskrcnn/provenance.json`.
 
-There is no 2021 training history in MLflow: the Colab notebook logged to TensorBoard, in Google
-Drive under `Final_project/model/train_results` (outside DVC). `mlruns/` only holds a Nov 2024 MLflow 1.30 log of the same weights as `deployement/`, in the
-old file-store format that MLflow 3 no longer opens by default. It stays in DVC as an archive.
+No Docker or server is needed: the UI reads `mlflow.db` and `mlartifacts/` directly. A shared tracking
+server becomes useful once runs come from several machines (e.g. training on a cloud GPU): start one
+and set `MLFLOW_TRACKING_URI`. All environments pin the same MLflow version (3.16) because they
+write to the same store.
 
-- **Experiments → `fashion-maskrcnn`**: one run per packaging, with the model settings as params.
-  Training runs will add loss and mAP curves here.
-- **Models → `fashion-maskrcnn`**: registered versions. The one currently in `models/` (and deployed)
-  is recorded in `models/fashion-maskrcnn/provenance.json`.
+There is no 2021 training history in MLflow: the Colab notebook logged to TensorBoard, in Google Drive
+under `Final_project/model/train_results` (outside DVC).
 
-No Docker or server is needed: the UI reads `mlflow.db` and `mlartifacts/` directly. A shared
-tracking server only becomes useful when runs come from several machines (e.g. training on a cloud
-GPU): start one and set `MLFLOW_TRACKING_URI` so runs log there instead of the local SQLite store.
+### Add a model family
+
+1. Create `trainers/<name>/`: a uv project depending on `fashion-seg-core` (path dependency) and its
+   framework. Read `prepared/annotations.parquet` and `prepared/split.json` so every model uses the
+   same data and split.
+2. Log to the `fashion-seg-training` experiment with a `model_family` tag; write `outputs/<name>/`.
+3. Add a `train_<name>` stage to `dvc.yaml` and a `train_<name>` section to `params.yaml`.
+4. To serve it: implement a predictor returning `Detections` (see `src/fashion_seg/serving/pyfunc.py`)
+   and package it through `FashionSegmentationModel`, so the response contract stays the same.
 
 ## Model contract
 
-`models/fashion-maskrcnn` is a standard MLflow model: anything that can run
-`mlflow models serve` can serve it.
+`models/fashion-maskrcnn` is a standard MLflow model: anything that can run `mlflow models serve`
+can serve it.
 
 ```bash
 uv run mlflow models serve -m models/fashion-maskrcnn --env-manager local -p 5001
@@ -173,13 +192,20 @@ Response, one entry per image, specified by `contracts/prediction.schema.json`:
 ```
 
 - `box` is `[y1, x1, y2, x2]` in pixels; `mask_rle` uses the iMaterialist encoding (1-indexed
-  `start length` pairs, column-major). Decode with `fashion_seg.rle.decode(mask_rle, height, width)`.
+  `start length` pairs, column-major). Decode with `fashion_seg_core.rle.decode(mask_rle, height, width)`.
 - The 2021 model drops detections below 0.7 inside the network, so `min_score` can only raise that.
-- **Keeping the contract is what makes models swappable.** Any new model (e.g. torchvision) must be
-  packaged through `FashionSegmentationModel` with a predictor returning `Detections`, never with a
-  raw framework flavor such as `mlflow.pytorch`. The contract tests fail otherwise.
+- **Keeping the contract is what makes models swappable.** Any new model must be packaged through
+  `FashionSegmentationModel` with a predictor returning `Detections`, never with a raw framework
+  flavor such as `mlflow.pytorch`. The contract tests fail otherwise.
 - The schema also lives in fashion-serving: change both copies together. Adding optional fields is
   backward compatible; renaming or removing fields is not.
+
+## Development
+
+```bash
+make format    # ruff format + autofix, all environments
+make check     # ruff, pylint (each env), pytest (orchestration + Matterport smoke training)
+```
 
 ## Continuous integration
 
@@ -187,9 +213,10 @@ Response, one entry per image, specified by `contracts/prediction.schema.json`:
 
 | Job | What it checks |
 |-----|----------------|
-| **Lint** | `ruff format --check`, `ruff check`, `pylint` (same as `make lint`) |
-| **Unit and contract tests** | RLE, pre/post-processing, MLflow wrapper; responses match `contracts/prediction.schema.json` |
-| **ML checks** | Pulls the pipeline inputs and the published model from Drive, fails if `dvc.lock` is stale (code or params changed without re-packaging), runs the tests against the real model |
+| **Lint** | `ruff format --check`, `ruff check`, `pylint` in each environment (same as `make lint`) |
+| **Unit and contract tests** | RLE, annotations and split, pre/post-processing, MLflow wrapper; responses match the contract |
+| **Matterport trainer** | Trains a tiny model on synthetic data and exports it (TF 2.15, Python 3.11) |
+| **ML checks** | Pulls the 2021 model and the published package from Drive, fails if `dvc.lock` is stale for `package_legacy`, runs the tests against the real model |
 
 The **ML checks** need Drive access and are skipped until the `GDRIVE_CREDENTIALS_DATA` secret
 exists. Use a service account (a personal OAuth token expires after 7 days while the app is in
@@ -204,9 +231,11 @@ Testing):
 
 ## Roadmap
 
-- **Retraining**: add `prepare` (train/val split) → `train` → `evaluate` stages, likely on torchvision
-  Mask R-CNN (maintained, runs on Apple Silicon). Log params/metrics to MLflow, write metrics to
-  `metrics.json` so `dvc metrics diff` and `dvc exp show` compare experiments. Then a generic
-  `package` stage exports the best run through the same wrapper. fashion-serving needs no change.
-- **CI for experiments**: once training exists, post `dvc params diff` / `dvc metrics diff` as a PR
-  comment.
+1. **`evaluate` stage**: one COCO mask-mAP evaluator on the validation split for every model,
+   including the 2021 model as baseline. Metrics to MLflow and `dvc metrics`.
+2. **Generic `package` stage**: package the best evaluated model (not only the 2021 one) and mark it
+   `@champion` in the MLflow registry; CI comments `dvc metrics diff` on the PR.
+3. **torchvision trainer** (`trainers/torchvision/`, PyTorch, runs on Apple Silicon GPUs).
+4. **2021 model anchors**: its exported `config.json` uses anchor scales 32–512 while it was trained
+   with 16–256; the evaluation stage will tell whether correcting it improves the baseline.
+5. **Augmentation** for the Matterport trainer (imgaug is unmaintained; needs a compatible substitute).

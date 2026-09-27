@@ -1,3 +1,36 @@
+data:
+  train_csv: data/imaterialist/train.csv
+  train_images: data/imaterialist/train
+  label_file: data/imaterialist/label_descriptions.json
+  prepared_dir: prepared
+
+# Frozen split shared by every model. Defaults reproduce the 2021 notebook
+# (KFold, 8 folds, shuffle, seed 42, fold 0 = validation).
+split:
+  n_folds: 8
+  fold: 0
+  seed: 42
+
+# Matterport Mask R-CNN (trainers/matterport). Defaults follow the 2021 notebook.
+train_matterport:
+  experiment: fashion-seg-training
+  output_dir: outputs/matterport
+  init_weights: weights/mask_rcnn_coco.h5   # COCO weights; heads are re-initialised
+  backbone: resnet101
+  image_min_dim: 800
+  image_max_dim: 1024
+  images_per_gpu: 2
+  rpn_anchor_scales: [16, 32, 64, 128, 256]
+  train_rois_per_image: 32
+  learning_rate: 0.0001
+  epochs: 2
+  layers: all                  # "heads", "3+", "4+", "5+" or "all"
+  steps_per_epoch: null        # null = one pass over the training images
+  validation_steps: null
+  max_train_images: null       # null = all
+  max_val_images: null
+  detection_min_confidence: 0.7
+
 legacy_model:
   saved_model_dir: deployement
   label_file: data/imaterialist/label_descriptions.json

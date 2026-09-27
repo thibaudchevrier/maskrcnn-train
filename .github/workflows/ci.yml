@@ -35,8 +35,23 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - run: make install
-      - run: make test
+      - run: uv sync --locked
+      - run: uv run pytest
+
+  trainer-matterport:
+    name: Matterport trainer (smoke training)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --project trainers/matterport
+      - name: Train a tiny model on synthetic data, export it
+        working-directory: trainers/matterport
+        env:
+          TF_CPP_MIN_LOG_LEVEL: "3"
+        run: uv run pytest -p no:warnings
 
   secrets-check:
     name: Detect DVC credentials
