@@ -12,6 +12,6 @@ def load_class_names(label_file: str | Path) -> list[str]:
     The model reserves id 0 for the background, so dataset category ``k`` is
     model class ``k + 1``.
     """
-    categories = json.loads(Path(label_file).read_text())["categories"]
+    categories = json.loads(Path(label_file).read_text(encoding="utf-8"))["categories"]
     ordered = sorted(categories, key=lambda c: c["id"])
     return [BACKGROUND] + [c["name"] for c in ordered]

@@ -32,7 +32,10 @@ DEFAULT_MIN_SCORE = 0.7
 
 
 class Predictor(Protocol):
-    def predict(self, image: np.ndarray) -> Detections: ...
+    """Anything turning an RGB image into detections (legacy TF model, torchvision, ...)."""
+
+    def predict(self, image: np.ndarray) -> Detections:
+        """image: [H, W, 3] uint8 RGB."""
 
 
 def decode_image(payload: str | bytes) -> np.ndarray:
@@ -43,6 +46,7 @@ def decode_image(payload: str | bytes) -> np.ndarray:
 
 
 def encode_image(image: np.ndarray, fmt: str = "PNG") -> str:
+    """[H, W, 3] uint8 RGB -> base64 string, the inverse of ``decode_image``."""
     buffer = io.BytesIO()
     Image.fromarray(image).save(buffer, format=fmt)
     return base64.b64encode(buffer.getvalue()).decode("ascii")
@@ -51,6 +55,7 @@ def encode_image(image: np.ndarray, fmt: str = "PNG") -> str:
 def format_detections(
     detections: Detections, class_names: list[str], image_shape: tuple[int, ...], min_score: float
 ) -> dict[str, Any]:
+    """Build the JSON response for one image (see the module docstring for the format)."""
     instances = [
         {
             "class_id": int(class_id),
@@ -67,7 +72,7 @@ def format_detections(
     return {"height": int(image_shape[0]), "width": int(image_shape[1]), "instances": instances}
 
 
-class FashionSegmentationModel(mlflow.pyfunc.PythonModel):
+class FashionSegmentationModel(mlflow.pyfunc.PythonModel):  # pylint: disable=abstract-method
     """Artifacts: ``saved_model`` (Matterport SavedModel dir) and ``labels`` (label json)."""
 
     def __init__(self, predictor: Predictor | None = None, class_names: list[str] | None = None):
@@ -76,6 +81,8 @@ class FashionSegmentationModel(mlflow.pyfunc.PythonModel):
         self._class_names = class_names
 
     def load_context(self, context: mlflow.pyfunc.PythonModelContext) -> None:
+        # Lazy import: TensorFlow is only needed when the real model is loaded.
+        # pylint: disable-next=import-outside-toplevel
         from fashion_seg.legacy.matterport import MatterportPredictor
 
         self._predictor = MatterportPredictor(context.artifacts["saved_model"])

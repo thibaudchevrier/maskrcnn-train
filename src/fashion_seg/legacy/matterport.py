@@ -33,7 +33,8 @@ class MatterportConfig:
 
     @classmethod
     def from_json(cls, path: str | Path) -> "MatterportConfig":
-        raw = json.loads(Path(path).read_text())
+        """Read the ``config.json`` exported next to the SavedModel."""
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
         if raw["IMAGE_RESIZE_MODE"] != "square":
             raise ValueError(f"Unsupported IMAGE_RESIZE_MODE: {raw['IMAGE_RESIZE_MODE']}")
         return cls(
@@ -231,6 +232,7 @@ class MatterportPredictor:
     """Runs the exported SavedModel on single RGB images."""
 
     def __init__(self, model_dir: str | Path):
+        # pylint: disable-next=import-outside-toplevel
         import tensorflow as tf  # imported lazily: heavy, and not needed for tests of numpy code
 
         model_dir = Path(model_dir)

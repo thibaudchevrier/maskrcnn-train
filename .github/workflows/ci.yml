@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TF_CPP_MIN_LOG_LEVEL: "2"
+
+jobs:
+  quality:
+    name: Lint (ruff, pylint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: make install
+      - run: make lint
+
+  tests:
+    name: Unit and contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: make install
+      - run: make test
+
+  secrets-check:
+    name: Detect DVC credentials
+    runs-on: ubuntu-latest
+    outputs:
+      gdrive: ${{ steps.check.outputs.gdrive }}
+    steps:
+      - id: check
+        env:
+          HAS_GDRIVE: ${{ secrets.GDRIVE_CREDENTIALS_DATA != '' }}
+        run: |
+          echo "gdrive=$HAS_GDRIVE" >> "$GITHUB_OUTPUT"
+          if [ "$HAS_GDRIVE" != "true" ]; then
+            echo "::notice::GDRIVE_CREDENTIALS_DATA is not set: ML checks are skipped (see README)."
+          fi
+
+  ml:
+    name: ML checks (DVC pipeline + real model)
+    needs: secrets-check
+    if: needs.secrets-check.outputs.gdrive == 'true'
+    runs-on: ubuntu-latest
+    env:
+      # Service account JSON key, read by DVC's Google Drive remote.
+      GDRIVE_CREDENTIALS_DATA: ${{ secrets.GDRIVE_CREDENTIALS_DATA }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: make install
+      - name: Use the service account for the DVC remote
+        run: uv run dvc remote modify --local myremote gdrive_use_service_account true
+      - name: Pull pipeline inputs and the published model
+        run: |
+          uv run dvc pull deployement.dvc data/imaterialist/label_descriptions.json package_legacy
+      - name: Published model is up to date with code, params and data
+        run: |
+          status="$(uv run dvc status --json package_legacy)"
+          echo "$status"
+          if [ "$status" != "{}" ]; then
+            echo "::error::dvc.lock is stale: run 'uv run dvc repro --single-item package_legacy', 'uv run dvc push' and commit dvc.lock."
+            exit 1
+          fi
+      - name: Tests against the real model
+        run: make test

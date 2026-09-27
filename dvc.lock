@@ -14,8 +14,8 @@ stages:
       nfiles: 4
     - path: src/fashion_seg
       hash: md5
-      md5: 9a33105433a604f3078508cd1186a1ed.dir
-      size: 19639
+      md5: f072df8596249dd276d30e3e77f4ebd7.dir
+      size: 20609
       nfiles: 9
     params:
       params.yaml:
@@ -28,6 +28,6 @@ stages:
     outs:
     - path: models/fashion-maskrcnn
       hash: md5
-      md5: ff7fdfef693b5e5446a26782506e5ca6.dir
-      size: 266078847
+      md5: 0c62b94447f12ffd62cf8f7e8f96a97d.dir
+      size: 266093773
       nfiles: 25

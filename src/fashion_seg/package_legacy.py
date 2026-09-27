@@ -38,6 +38,7 @@ SIGNATURE = ModelSignature(
 
 
 def pip_requirements() -> list[str]:
+    """Runtime requirements of the model, pinned to the versions used to package it."""
     return [
         f"{pkg}=={version(pkg)}"
         for pkg in ("mlflow", "tensorflow", "numpy", "pandas", "scikit-image", "pillow")
@@ -45,30 +46,32 @@ def pip_requirements() -> list[str]:
 
 
 def input_example() -> pd.DataFrame:
+    """Small random image used by MLflow to validate the model and document the input."""
     rng = np.random.default_rng(0)
     image = rng.integers(0, 255, size=(64, 48, 3), dtype=np.uint8)
     return pd.DataFrame({IMAGE_COLUMN: [encode_image(image)]})
 
 
 def main() -> None:
-    params = yaml.safe_load(Path("params.yaml").read_text())["legacy_model"]
+    """Log, register and export the legacy model as configured in ``params.yaml``."""
+    params = yaml.safe_load(Path("params.yaml").read_text(encoding="utf-8"))["legacy_model"]
     saved_model = Path(params["saved_model_dir"])
     labels = Path(params["label_file"])
     output_dir = Path(params["output_dir"])
 
-    model_kwargs = dict(
-        python_model=FashionSegmentationModel(),
-        artifacts={"saved_model": str(saved_model), "labels": str(labels)},
-        code_paths=[str(CODE_PATH)],
-        pip_requirements=pip_requirements(),
-        signature=SIGNATURE,
-        input_example=input_example(),
-    )
+    model_kwargs = {
+        "python_model": FashionSegmentationModel(),
+        "artifacts": {"saved_model": str(saved_model), "labels": str(labels)},
+        "code_paths": [str(CODE_PATH)],
+        "pip_requirements": pip_requirements(),
+        "signature": SIGNATURE,
+        "input_example": input_example(),
+    }
 
     setup_experiment(params["experiment"])
     with mlflow.start_run(run_name="legacy-matterport-2021") as run:
         mlflow.set_tags({"framework": "matterport-maskrcnn-tf2", "origin": "legacy-2021"})
-        model_config = json.loads((saved_model / "config.json").read_text())
+        model_config = json.loads((saved_model / "config.json").read_text(encoding="utf-8"))
         mlflow.log_params({f"model.{k}": model_config[k] for k in LOGGED_CONFIG_KEYS})
         info = mlflow.pyfunc.log_model(
             name="model", registered_model_name=params["registered_name"], **model_kwargs
@@ -87,7 +90,8 @@ def main() -> None:
             },
             indent=2,
         )
-        + "\n"
+        + "\n",
+        encoding="utf-8",
     )
     print(
         f"Registered {params['registered_name']} v{info.registered_model_version}; "

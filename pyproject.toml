@@ -33,7 +33,24 @@ testpaths = ["tests"]
 [dependency-groups]
 dev = [
     "dvc[gdrive]>=3.59",
+    "jsonschema>=4.26.0",
+    "pylint>=4.0.9",
     "pyopenssl>=24.2.1",
     "pytest>=9.1.1",
     "ruff>=0.16.9",
 ]
+
+[tool.pylint.main]
+py-version = "3.12"
+extension-pkg-allow-list = ["numpy"]
+
+[tool.pylint."messages control"]
+disable = ["too-few-public-methods"]
+
+[tool.pylint.design]
+# The numpy code ported from Matterport keeps its original, step-by-step structure.
+max-locals = 25
+max-attributes = 12
+
+[tool.pylint.format]
+max-line-length = 100
