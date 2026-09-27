@@ -40,8 +40,10 @@ testpaths = ["tests", "packages/core/tests"]
 
 [dependency-groups]
 dev = [
+    "commitizen>=4.19",
     "dvc[gdrive]>=3.59",
     "jsonschema>=4.26.0",
+    "pre-commit>=4",
     "pylint>=4.0.9",
     "pyopenssl>=24.2.1",
     "pytest>=9.1.1",
@@ -62,3 +64,10 @@ max-attributes = 12
 
 [tool.pylint.format]
 max-line-length = 100
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_provider = "uv"          # bumps pyproject.toml and uv.lock together
+tag_format = "v$version"
+update_changelog_on_bump = true
+major_version_zero = true        # breaking changes bump the minor version while < 1.0

@@ -16,6 +16,20 @@ env:
   TF_CPP_MIN_LOG_LEVEL: "2"
 
 jobs:
+  commits:
+    name: Conventional commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - name: Every commit of the PR follows Conventional Commits
+        run: >-
+          uvx --from commitizen==4.19.0 cz check
+          --rev-range ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
+
   quality:
     name: Lint (ruff, pylint)
     runs-on: ubuntu-latest
