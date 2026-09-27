@@ -203,9 +203,26 @@ Response, one entry per image, specified by `contracts/prediction.schema.json`:
 ## Development
 
 ```bash
+uv run pre-commit install --hook-type pre-commit --hook-type commit-msg   # once
 make format    # ruff format + autofix, all environments
 make check     # ruff, pylint (each env), pytest (orchestration + Matterport smoke training)
 ```
+
+The hooks format and lint staged Python files with ruff and check the commit message.
+
+### Commits, versions and releases
+
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/): `feat: ...`,
+`fix(prepare): ...`, `refactor(data): ...`, `docs: ...`, `ci: ...`. They are checked by the
+`commit-msg` hook and on every PR by CI. `uv run cz commit` writes one interactively.
+
+Releases are automatic. On every merge to `main`, [commitizen](https://commitizen-tools.github.io/commitizen/)
+reads the commits since the last tag. A `feat` (minor), `fix`/`perf` (patch) or breaking change
+(minor while < 1.0) bumps the version in `pyproject.toml` and `uv.lock`, updates `CHANGELOG.md`,
+tags `vX.Y.Z` and publishes a GitHub Release with the changelog entry. Other types never release.
+
+The version tracks the code; model versions are tracked separately by the MLflow registry and
+`dvc.lock`.
 
 ## Continuous integration
 
