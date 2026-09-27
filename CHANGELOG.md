@@ -1,3 +1,9 @@
+## v0.1.1 (2026-09-27)
+
+### Fix
+
+- **serving**: use the released contract and Matterport inference packages
+
 ## v0.1.0 (2026-09-28)
 
 ### Feat
