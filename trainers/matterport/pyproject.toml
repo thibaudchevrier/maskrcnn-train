@@ -4,14 +4,17 @@ version = "0.1.0"
 description = "Trains Matterport Mask R-CNN on the prepared iMaterialist data, tracked in MLflow"
 requires-python = ">=3.11,<3.12"
 dependencies = [
+    "fashion-seg-contract",
     "fashion-seg-core",
-    "maskrcnn-matterport",
+    "maskrcnn-matterport[train]",
     "pyyaml",
 ]
 
 [tool.uv.sources]
 fashion-seg-core = { path = "../../packages/core", editable = true }
-maskrcnn-matterport = { git = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2", tag = "v0.2.0" }
+# Released wheels, referenced by URL like packages from a registry (GitHub Releases).
+fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
+maskrcnn-matterport = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl" }
 
 [dependency-groups]
 dev = ["pytest", "pylint"]

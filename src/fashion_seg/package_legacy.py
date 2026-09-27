@@ -9,10 +9,9 @@ Run through DVC: ``uv run dvc repro package_legacy``.
 
 import json
 import shutil
-from importlib.metadata import version
+from importlib.metadata import distribution, version
 from pathlib import Path
 
-import fashion_seg_core
 import mlflow
 import numpy as np
 import yaml
@@ -29,7 +28,10 @@ from fashion_seg.serving.pyfunc import (
 )
 
 # The model ships its own copy of the code it imports at load time.
-CODE_PATHS = [str(Path(pkg.__file__).parent) for pkg in (fashion_seg, fashion_seg_core)]
+# Our own serving code ships inside the model; released packages are requirements.
+CODE_PATH = str(Path(fashion_seg.__file__).parent)
+PINNED = ("mlflow", "tensorflow", "numpy", "pandas", "pillow")
+RELEASED = ("fashion-seg-contract", "maskrcnn-matterport")
 LOGGED_CONFIG_KEYS = ("BACKBONE", "NUM_CLASSES", "IMAGE_MAX_DIM", "DETECTION_MIN_CONFIDENCE")
 
 SIGNATURE = ModelSignature(
@@ -39,11 +41,21 @@ SIGNATURE = ModelSignature(
 
 
 def pip_requirements() -> list[str]:
-    """Runtime requirements of the model, pinned to the versions used to package it."""
-    return [
-        f"{pkg}=={version(pkg)}"
-        for pkg in ("mlflow", "tensorflow", "numpy", "pandas", "scikit-image", "pillow")
-    ]
+    """Runtime requirements of the model, pinned to exactly what was used to package it.
+
+    Released packages are pinned to the wheel URL they were installed from (``pyproject.toml``
+    ``[tool.uv.sources]``), as they would be from a package registry.
+    """
+    pinned = [f"{pkg}=={version(pkg)}" for pkg in PINNED]
+    released = [f"{pkg} @ {_installed_from(pkg)}" for pkg in RELEASED]
+    return pinned + released
+
+
+def _installed_from(package: str) -> str:
+    direct_url = distribution(package).read_text("direct_url.json")
+    if not direct_url:
+        raise RuntimeError(f"{package} was not installed from a URL: check [tool.uv.sources]")
+    return json.loads(direct_url)["url"]
 
 
 def input_example() -> dict[str, list[str]]:
@@ -63,7 +75,7 @@ def main() -> None:
     model_kwargs = {
         "python_model": FashionSegmentationModel(),
         "artifacts": {"saved_model": str(saved_model), "labels": str(labels)},
-        "code_paths": CODE_PATHS,
+        "code_paths": [CODE_PATH],
         "pip_requirements": pip_requirements(),
         "signature": SIGNATURE,
         "input_example": input_example(),

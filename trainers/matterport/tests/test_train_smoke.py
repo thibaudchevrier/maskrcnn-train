@@ -5,7 +5,7 @@ import json
 import numpy as np
 import polars as pl
 import yaml
-from fashion_seg_core import rle
+from fashion_seg_contract import rle
 from fashion_seg_matterport import train
 from fashion_seg_matterport.dataset import FashionDataset
 from PIL import Image

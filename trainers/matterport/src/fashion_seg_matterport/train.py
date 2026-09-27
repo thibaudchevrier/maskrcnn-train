@@ -2,7 +2,7 @@
 
 Outputs (``train_matterport.output_dir``):
 - ``model/``: inference model as ``config.json`` + TF SavedModel, the format that
-  ``fashion_seg.legacy.matterport.MatterportPredictor`` serves;
+  ``fashion_seg.predictors.matterport.MatterportPredictor`` serves;
 - ``metrics.json``: final-epoch losses (``dvc metrics show``).
 
 Run through DVC (``uv run dvc repro --single-item train_matterport``) or, for a quick check on
@@ -20,8 +20,8 @@ import keras  # Keras 2.15, the same package as tf.keras in TensorFlow 2.15
 import mlflow
 import tensorflow as tf
 import yaml
+from fashion_seg_contract.labels import load_class_names
 from fashion_seg_core import annotations
-from fashion_seg_core.labels import load_class_names
 from fashion_seg_core.tracking import setup_experiment
 from mrcnn import config as mconfig
 from mrcnn import model as modellib

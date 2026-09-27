@@ -38,22 +38,37 @@ imports and serves.
 
 | Path | Content | Stored in |
 |------|---------|-----------|
-| `packages/core/` | `fashion-seg-core`: RLE codec, labels, per-image annotations, MLflow setup. Light dependencies, installed in every environment | git |
-| `src/fashion_seg/` | Orchestration (Python 3.12): `prepare` stage, packaging, the MLflow serving wrapper, the legacy Matterport predictor | git |
-| `trainers/matterport/` | Matterport Mask R-CNN trainer: its own uv project (Python 3.11, TensorFlow 2.15, [maskrcnn-matterport](https://github.com/thibaudchevrier/maskrcnn-matterport-tf2) `v0.2.0`) | git |
+| `packages/core/` | `fashion-seg-core`: prepared annotations and MLflow setup, shared by the orchestration env and every trainer | git |
+| `src/fashion_seg/` | Orchestration (Python 3.12): `prepare` stage, packaging, the MLflow serving wrapper (`serving/`), one predictor adapter per model family (`predictors/`) | git |
+| `trainers/matterport/` | Matterport Mask R-CNN trainer: its own uv project (Python 3.11, `maskrcnn-matterport[train]`, i.e. TensorFlow 2.15) | git |
 | `data/` | iMaterialist images + `train.csv` + `label_descriptions.json` (~23.7 GB, 48k files) | DVC (`data.dvc`) |
 | `prepared/` | `annotations.parquet` (one row per image) + `split.json` (frozen train/val ids) | DVC (`prepare` stage) |
 | `weights/mask_rcnn_coco.h5` | COCO starting weights, imported from Matterport's release | DVC (`import-url`) |
 | `outputs/<model>/` | Trained model (`model/`: `config.json` + SavedModel) and `metrics.json` | DVC (`train_<model>` stage) |
 | `deployement/` | 2021 Matterport model (TF SavedModel + `config.json`) | DVC (`deployement.dvc`) |
 | `models/fashion-maskrcnn/` | **Build output**: the packaged MLflow model consumed by fashion-serving | DVC (`package_legacy` stage) |
-| `contracts/prediction.schema.json` | JSON Schema of the model's response, shared with fashion-serving | git |
 | `mlruns/` | Archive: a Nov 2024 MLflow 1.30 log of the 2021 weights (no params or metrics) | DVC (`mlruns.dvc`) |
 | `mlflow.db`, `mlartifacts/` | Local MLflow tracking store | not versioned |
 
-The deployed model is still the 2021 one, re-packaged: TensorFlow 2.21 loads its SavedModel, with the
-Matterport pre/post-processing ported to numpy (`src/fashion_seg/legacy/matterport.py`). Models
+The deployed model is still the 2021 one, re-packaged: TensorFlow 2.21 loads its SavedModel, and
+maskrcnn-matterport's `mrcnn.serving` runs it with Matterport's own pre/post-processing. Models
 trained here are exported in the same format, so they are packaged and served the same way.
+
+### Released packages
+
+Code shared with other repositories comes from released packages, not copies:
+
+| Package | Provides | Used by |
+|---------|----------|---------|
+| [fashion-seg-contract](https://github.com/thibaudchevrier/fashion-seg-contract) | Response JSON Schema, RLE `encode`/`decode`, label mapping | serving wrapper, Matterport trainer, fashion-serving |
+| [maskrcnn-matterport](https://github.com/thibaudchevrier/maskrcnn-matterport-tf2) | Matterport network and training (`[train]`), TensorFlow-free inference helpers and export runner | Matterport trainer (`[train]`), serving wrapper (base) |
+
+They are referenced by the URL of their released wheel in `[tool.uv.sources]` (`pyproject.toml` and
+`trainers/matterport/pyproject.toml`), as from a package registry: GitHub Packages has no Python
+registry, so each release attaches its wheel. The packaged model pins the same URLs in its
+`requirements.txt`. To upgrade, change the URL in both files, run `uv lock` (and
+`uv lock --project trainers/matterport`), then `uv run dvc repro --single-item package_legacy`: DVC
+tracks `tool.uv.sources` as a parameter of that stage, so the model is re-packaged.
 
 ## Pipeline
 
@@ -159,13 +174,14 @@ under `Final_project/model/train_results` (outside DVC).
 
 ### Add a model family
 
-1. Create `trainers/<name>/`: a uv project depending on `fashion-seg-core` (path dependency) and its
-   framework. Read `prepared/annotations.parquet` and `prepared/split.json` so every model uses the
+1. Create `trainers/<name>/`: a uv project depending on `fashion-seg-core` (path dependency),
+   `fashion-seg-contract` (wheel URL) and its framework. Read `prepared/annotations.parquet` and `prepared/split.json` so every model uses the
    same data and split.
 2. Log to the `fashion-seg-training` experiment with a `model_family` tag; write `outputs/<name>/`.
 3. Add a `train_<name>` stage to `dvc.yaml` and a `train_<name>` section to `params.yaml`.
-4. To serve it: implement a predictor returning `Detections` (see `src/fashion_seg/serving/pyfunc.py`)
-   and package it through `FashionSegmentationModel`, so the response contract stays the same.
+4. To serve it: add `src/fashion_seg/predictors/<name>.py`, a predictor returning `Detections`
+   (see `predictors/base.py`), and package it through `FashionSegmentationModel`, so the response
+   contract stays the same.
 
 ## Model contract
 
@@ -183,7 +199,8 @@ POST /invocations
 {"dataframe_records": [{"image": "<base64 jpeg/png>"}], "params": {"min_score": 0.8}}
 ```
 
-Response, one entry per image, specified by `contracts/prediction.schema.json`:
+Response, one entry per image, specified by the JSON Schema in
+[fashion-seg-contract](https://github.com/thibaudchevrier/fashion-seg-contract):
 
 ```json
 {"predictions": [{"height": 400, "width": 300, "instances": [
@@ -192,13 +209,14 @@ Response, one entry per image, specified by `contracts/prediction.schema.json`:
 ```
 
 - `box` is `[y1, x1, y2, x2]` in pixels; `mask_rle` uses the iMaterialist encoding (1-indexed
-  `start length` pairs, column-major). Decode with `fashion_seg_core.rle.decode(mask_rle, height, width)`.
+  `start length` pairs, column-major). Decode with `fashion_seg_contract.rle.decode(mask_rle, height, width)`.
 - The 2021 model drops detections below 0.7 inside the network, so `min_score` can only raise that.
 - **Keeping the contract is what makes models swappable.** Any new model must be packaged through
   `FashionSegmentationModel` with a predictor returning `Detections`, never with a raw framework
   flavor such as `mlflow.pytorch`. The contract tests fail otherwise.
-- The schema also lives in fashion-serving: change both copies together. Adding optional fields is
-  backward compatible; renaming or removing fields is not.
+- The contract is versioned in its own package: adding optional fields is backward compatible;
+  renaming or removing fields is a breaking release of fashion-seg-contract, which consumers adopt
+  before the producer ships it.
 
 ## Development
 
@@ -231,7 +249,7 @@ The version tracks the code; model versions are tracked separately by the MLflow
 | Job | What it checks |
 |-----|----------------|
 | **Lint** | `ruff format --check`, `ruff check`, `pylint` in each environment (same as `make lint`) |
-| **Unit and contract tests** | RLE, annotations and split, pre/post-processing, MLflow wrapper; responses match the contract |
+| **Unit and contract tests** | Annotations and split, MLflow wrapper; responses validated with `fashion_seg_contract.schema` |
 | **Matterport trainer** | Trains a tiny model on synthetic data and exports it (TF 2.15, Python 3.11) |
 | **ML checks** | Pulls the 2021 model and the published package from Drive, fails if `dvc.lock` is stale for `package_legacy`, runs the tests against the real model |
 

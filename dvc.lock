@@ -12,16 +12,11 @@ stages:
       md5: d2814262190bed9dfca1b3ab6b925c2c.dir
       size: 265710486
       nfiles: 4
-    - path: packages/core/src/fashion_seg_core
-      hash: md5
-      md5: 2d1f4d654d68475fbdf82665fdefddf8.dir
-      size: 4915
-      nfiles: 5
     - path: src/fashion_seg
       hash: md5
-      md5: b542cc046ca9701818563bb52219a1b1.dir
-      size: 20528
-      nfiles: 7
+      md5: b304be15aafb34bbf1539e7743e76aa4.dir
+      size: 12608
+      nfiles: 8
     params:
       params.yaml:
         legacy_model:
@@ -30,12 +25,22 @@ stages:
           output_dir: models/fashion-maskrcnn
           experiment: fashion-maskrcnn
           registered_name: fashion-maskrcnn
+      pyproject.toml:
+        tool.uv.sources:
+          fashion-seg-core:
+            workspace: true
+          fashion-seg-contract:
+            url: 
+              https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl
+          maskrcnn-matterport:
+            url: 
+              https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl
     outs:
     - path: models/fashion-maskrcnn
       hash: md5
-      md5: c2a62d0fc72cc9699170affb8bed731a.dir
-      size: 266103113
-      nfiles: 28
+      md5: 0366e57b4864c390b548206536557d2d.dir
+      size: 266103174
+      nfiles: 24
   prepare:
     cmd: python -m fashion_seg.prepare
     deps:
@@ -45,8 +50,8 @@ stages:
       size: 1437924420
     - path: packages/core/src/fashion_seg_core/annotations.py
       hash: md5
-      md5: c5a1ae3ce10b73c7280d358fda9e7a1c
-      size: 2126
+      md5: 01bceca6b6c4a5fd3ee283ff11b544d1
+      size: 2130
     - path: src/fashion_seg/prepare.py
       hash: md5
       md5: 7589b4caad85a642504062fe167384d5

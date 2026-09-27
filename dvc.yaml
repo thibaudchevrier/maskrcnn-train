@@ -38,8 +38,10 @@ stages:
       - ${legacy_model.saved_model_dir}
       - ${legacy_model.label_file}
       - src/fashion_seg
-      - packages/core/src/fashion_seg_core
     params:
       - legacy_model
+      # Pinned wheels of fashion-seg-contract / maskrcnn-matterport: the model's requirements.
+      - pyproject.toml:
+          - tool.uv.sources
     outs:
       - ${legacy_model.output_dir}

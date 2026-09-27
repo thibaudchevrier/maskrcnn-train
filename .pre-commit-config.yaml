@@ -1,21 +1,23 @@
 # Install once: uv run pre-commit install --hook-type pre-commit --hook-type commit-msg
+# Hooks use `uv run --no-sync`: during a partial commit pre-commit hides unstaged changes (e.g. a
+# uv.lock matching staged pyproject.toml edits); syncing would then try to rewrite the lockfile.
 repos:
   - repo: local
     hooks:
       - id: commitizen
         name: conventional commit message
-        entry: uv run cz check --allow-abort --commit-msg-file
+        entry: uv run --no-sync cz check --allow-abort --commit-msg-file
         language: system
         stages: [commit-msg]
       - id: ruff-format
         name: ruff format
-        entry: uv run ruff format
+        entry: uv run --no-sync ruff format
         language: system
         types: [python]
         files: ^(src|tests|packages|trainers)/
       - id: ruff-check
         name: ruff check
-        entry: uv run ruff check --fix
+        entry: uv run --no-sync ruff check --fix
         language: system
         types: [python]
         files: ^(src|tests|packages|trainers)/

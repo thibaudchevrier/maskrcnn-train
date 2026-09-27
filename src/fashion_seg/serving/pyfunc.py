@@ -10,32 +10,25 @@ Response: one entry per input image::
         {"class_id": 1, "label": "shirt, blouse", "score": 0.97,
          "box": [y1, x1, y2, x2], "mask_rle": "12 3 40 5 ..."}]}
 
-Masks use the same RLE as the iMaterialist annotations (see ``fashion_seg_core.rle``),
+Masks use the same RLE as the iMaterialist annotations (see ``fashion_seg_contract.rle``),
 relative to the image after EXIF orientation is applied.
 """
 
 import base64
 import io
-from typing import Any, Protocol
+from typing import Any
 
 import mlflow.pyfunc
 import numpy as np
 import pandas as pd  # MLflow's pyfunc interface: predict() receives a pandas DataFrame
-from fashion_seg_core import rle
-from fashion_seg_core.labels import load_class_names
+from fashion_seg_contract import rle
+from fashion_seg_contract.labels import load_class_names
 from PIL import Image, ImageOps
 
-from fashion_seg.legacy.matterport import Detections
+from fashion_seg.predictors.base import Detections, Predictor
 
 IMAGE_COLUMN = "image"
 DEFAULT_MIN_SCORE = 0.7
-
-
-class Predictor(Protocol):
-    """Anything turning an RGB image into detections (legacy TF model, torchvision, ...)."""
-
-    def predict(self, image: np.ndarray) -> Detections:
-        """image: [H, W, 3] uint8 RGB."""
 
 
 def decode_image(payload: str | bytes) -> np.ndarray:
@@ -83,7 +76,7 @@ class FashionSegmentationModel(mlflow.pyfunc.PythonModel):  # pylint: disable=ab
     def load_context(self, context: mlflow.pyfunc.PythonModelContext) -> None:
         # Lazy import: TensorFlow is only needed when the real model is loaded.
         # pylint: disable-next=import-outside-toplevel
-        from fashion_seg.legacy.matterport import MatterportPredictor
+        from fashion_seg.predictors.matterport import MatterportPredictor
 
         self._predictor = MatterportPredictor(context.artifacts["saved_model"])
         self._class_names = load_class_names(context.artifacts["labels"])

@@ -811,13 +811,14 @@ name = "fashion-seg"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "fashion-seg-contract" },
     { name = "fashion-seg-core" },
+    { name = "maskrcnn-matterport" },
     { name = "mlflow" },
     { name = "numpy" },
     { name = "pillow" },
     { name = "polars" },
     { name = "pyyaml" },
-    { name = "scikit-image" },
     { name = "scikit-learn" },
     { name = "tensorflow" },
 ]
@@ -836,13 +837,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "fashion-seg-contract", url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" },
     { name = "fashion-seg-core", editable = "packages/core" },
+    { name = "maskrcnn-matterport", url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl" },
     { name = "mlflow", specifier = ">=3.16,<3.17" },
     { name = "numpy", specifier = ">=2.5.3" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "polars", specifier = ">=1.20" },
     { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "scikit-image", specifier = ">=0.26.0" },
     { name = "scikit-learn", specifier = ">=1.5" },
     { name = "tensorflow", specifier = ">=2.18" },
 ]
@@ -858,6 +860,24 @@ dev = [
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff", specifier = ">=0.16.9" },
 ]
+
+[[package]]
+name = "fashion-seg-contract"
+version = "0.1.0"
+source = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
+dependencies = [
+    { name = "numpy" },
+]
+wheels = [
+    { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl", hash = "sha256:ff4b470e9bc105639d3d6715b6a03198ed910f94a4d088532ae95aac4461aade" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jsonschema", marker = "extra == 'validate'", specifier = ">=4.18" },
+    { name = "numpy", specifier = ">=1.23" },
+]
+provides-extras = ["validate"]
 
 [[package]]
 name = "fashion-seg-core"
@@ -1578,6 +1598,33 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/aa/5b/bec5aa9bbbb2c946ca2733ef9c4ca91c91b6a24580193e891b5f7dbe8e1e/markupsafe-3.0.3-cp312-cp312-win_amd64.whl", hash = "sha256:26a5784ded40c9e318cfc2bdb30fe164bdb8665ded9cd64d500a34fb42067b1c", size = 15105, upload-time = "2025-09-27T18:36:39.701Z" },
     { url = "https://files.pythonhosted.org/packages/e5/f1/216fc1bbfd74011693a4fd837e7026152e89c4bcf3e77b6692fba9923123/markupsafe-3.0.3-cp312-cp312-win_arm64.whl", hash = "sha256:35add3b638a5d900e807944a078b51922212fb3dedb01633a8defc4b01a3c85f", size = 13906, upload-time = "2025-09-27T18:36:40.689Z" },
 ]
+
+[[package]]
+name = "maskrcnn-matterport"
+version = "0.3.0"
+source = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl" }
+dependencies = [
+    { name = "numpy" },
+    { name = "scikit-image" },
+]
+wheels = [
+    { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl", hash = "sha256:1d2fe962c0f4d339c0af224eb387350fc24f9cdfd4863b991099f71c843e637d" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "h5py", marker = "extra == 'train'" },
+    { name = "ipython", marker = "extra == 'viz'" },
+    { name = "matplotlib", marker = "extra == 'viz'" },
+    { name = "numpy", specifier = ">=1.23" },
+    { name = "numpy", marker = "extra == 'train'", specifier = "<2" },
+    { name = "pillow", marker = "extra == 'train'" },
+    { name = "scikit-image", specifier = ">=0.19" },
+    { name = "scipy", marker = "extra == 'train'" },
+    { name = "tensorflow", marker = "python_full_version < '3.12' and extra == 'train'", specifier = ">=2.15,<2.16" },
+    { name = "tensorflow", marker = "extra == 'serve'", specifier = ">=2.15" },
+]
+provides-extras = ["serve", "train", "viz"]
 
 [[package]]
 name = "matplotlib"
