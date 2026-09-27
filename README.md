@@ -130,11 +130,21 @@ After the merge, deploy it in fashion-serving with `dvc update` (see its README)
 ### Browse experiments
 
 ```bash
-uv run mlflow ui --backend-store-uri sqlite:///mlflow.db     # runs and registered versions
-uv run mlflow ui --backend-store-uri ./mlruns --port 5001    # 2021 history
+make mlflow-ui            # http://localhost:5002: runs and registered model versions
+make mlflow-ui-legacy     # http://localhost:5003: 2021 Colab runs (after `uv run dvc pull mlruns.dvc`)
 ```
 
-Set `MLFLOW_TRACKING_URI` to log to a remote MLflow server instead of the local SQLite store.
+Stop with Ctrl+C. Change the port with `make mlflow-ui MLFLOW_PORT=5010`. The defaults avoid 5000
+(AirPlay on macOS) and 5001 (fashion-serving's inference service).
+
+- **Experiments → `fashion-maskrcnn`**: one run per packaging, with the model settings as params.
+  Training runs will add loss and mAP curves here.
+- **Models → `fashion-maskrcnn`**: registered versions. The one currently in `models/` (and deployed)
+  is recorded in `models/fashion-maskrcnn/provenance.json`.
+
+No Docker or server is needed: the UI reads `mlflow.db` and `mlartifacts/` directly. A shared
+tracking server only becomes useful when runs come from several machines (e.g. training on a cloud
+GPU): start one and set `MLFLOW_TRACKING_URI` so runs log there instead of the local SQLite store.
 
 ## Model contract
 
