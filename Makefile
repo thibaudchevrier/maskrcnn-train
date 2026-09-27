@@ -1,28 +1,24 @@
-# Same commands locally and in CI (.github/workflows/ci.yml).
-PYLINT_TESTS_DISABLE = missing-module-docstring,missing-class-docstring,missing-function-docstring,unbalanced-tuple-unpacking,import-outside-toplevel,redefined-outer-name
-PY_DIRS = src tests packages trainers
+# `lint` runs the pre-commit hooks on every file: the same checks as the git hooks and CI.
 MATTERPORT = uv run --project trainers/matterport
 # 5000 is taken by AirPlay on macOS, 5001 by fashion-serving's inference service.
 MLFLOW_PORT ?= 5002
 SAMPLE_IMAGES ?= 12
 
-.PHONY: install format lint test check mlflow-ui prepare pull-sample train-matterport-smoke
+.PHONY: install hooks format lint test check mlflow-ui prepare pull-sample train-matterport-smoke
 
 install:
 	uv sync --locked
 	uv sync --locked --project trainers/matterport
 
+hooks:
+	uv run pre-commit install --hook-type pre-commit --hook-type commit-msg
+
 format:
-	uv run ruff format $(PY_DIRS)
-	uv run ruff check --fix $(PY_DIRS)
+	uv run ruff format .
+	uv run ruff check --fix .
 
 lint:
-	uv run ruff format --check $(PY_DIRS)
-	uv run ruff check $(PY_DIRS)
-	uv run pylint src packages/core/src
-	uv run pylint tests --disable=$(PYLINT_TESTS_DISABLE)
-	$(MATTERPORT) pylint --rcfile trainers/matterport/pyproject.toml trainers/matterport/src
-	$(MATTERPORT) pylint --rcfile trainers/matterport/pyproject.toml trainers/matterport/tests/*.py --disable=$(PYLINT_TESTS_DISABLE)
+	uv run pre-commit run --all-files --show-diff-on-failure
 
 test:
 	uv run pytest

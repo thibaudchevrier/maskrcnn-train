@@ -33,14 +33,36 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/fashion_seg"]
 
+# Lint config for all Python code (src/, tests/, packages/, trainers/). pylint's is per
+# environment: here for the orchestration env, in trainers/<name>/pyproject.toml for trainers.
 [tool.ruff]
 line-length = 100
+target-version = "py311"
+extend-exclude = ["models", "outputs", "mlartifacts"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+# pycodestyle, pyflakes, isort, pyupgrade, bugbear, comprehensions, simplify, docstrings
+select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "D"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["fashion_seg", "fashion_seg_core", "fashion_seg_matterport"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+# Every parameter, return value and raised exception is documented (numpy style), with types
+# matching the signature's annotations. Tests only need short docstrings (ruff D).
+[tool.pydoclint]
+style = "numpy"
+exclude = '\.venv|tests|models|outputs'
+skip-checking-short-docstrings = false
+arg-type-hints-in-docstring = true
+check-return-types = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# Docstring examples are tests too.
+testpaths = ["src", "packages/core/src", "tests"]
+addopts = "--doctest-modules"
 
 [dependency-groups]
 dev = [
@@ -48,6 +70,7 @@ dev = [
     "dvc[gdrive]>=3.59",
     "jsonschema>=4.26.0",
     "pre-commit>=4",
+    "pydoclint>=0.10.0",
     "pylint>=4.0.9",
     "pyopenssl>=24.2.1",
     "pytest>=9.1.1",
@@ -59,7 +82,8 @@ py-version = "3.12"
 extension-pkg-allow-list = ["numpy"]
 
 [tool.pylint."messages control"]
-disable = ["too-few-public-methods"]
+# Import order is ruff's job (isort rules), which knows the first-party packages.
+disable = ["too-few-public-methods", "wrong-import-order", "ungrouped-imports"]
 
 [tool.pylint.design]
 # The numpy code ported from Matterport keeps its original, step-by-step structure.

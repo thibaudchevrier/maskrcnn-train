@@ -17,7 +17,10 @@ fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-c
 maskrcnn-matterport = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl" }
 
 [dependency-groups]
-dev = ["pytest", "pylint"]
+dev = [
+    "pytest",
+    "pylint",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -27,13 +30,16 @@ build-backend = "hatchling.build"
 packages = ["src/fashion_seg_matterport"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# Docstring examples are tests too.
+testpaths = ["src", "tests"]
+addopts = "--doctest-modules"
 
 [tool.pylint.main]
 py-version = "3.11"
 
 [tool.pylint."messages control"]
-disable = ["too-few-public-methods"]
+# Import order is ruff's job (isort rules), which knows the first-party packages.
+disable = ["too-few-public-methods", "wrong-import-order", "ungrouped-imports"]
 
 [tool.pylint.format]
 max-line-length = 100
