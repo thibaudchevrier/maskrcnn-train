@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/thibaudchevrier/maskrcnn-train/contracts/prediction.schema.json",
+  "$id": "https://github.com/thibaudchevrier/fashion-seg-train/contracts/prediction.schema.json",
   "title": "Fashion segmentation prediction (one image)",
-  "description": "Contract between the model packaged by maskrcnn-train and its consumers (fashion-serving). A copy lives in both repositories: change them together. Adding optional fields is backward compatible; renaming or removing fields is not.",
+  "description": "Contract between the model packaged by fashion-seg-train and its consumers (fashion-serving). A copy lives in both repositories: change them together. Adding optional fields is backward compatible; renaming or removing fields is not.",
   "type": "object",
   "required": ["height", "width", "instances"],
   "properties": {

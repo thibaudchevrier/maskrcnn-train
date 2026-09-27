@@ -1,4 +1,4 @@
-# maskrcnn-train
+# fashion-seg-train
 
 Fashion instance segmentation: detect and segment the clothes in a photo (Mask R-CNN,
 [iMaterialist 2019](https://www.kaggle.com/c/imaterialist-fashion-2019-FGVC6), 46 categories).
@@ -10,7 +10,7 @@ self-contained MLflow model that
 ## How it fits together
 
 ```
-                      maskrcnn-train (this repo)                               fashion-serving
+                      fashion-seg-train (this repo)                            fashion-serving
  ┌──────────────┐   dvc pull   ┌──────────────────────────────┐
  │ Google Drive │ ───────────► │ data/          deployement/  │
  │ (DVC remote) │              │   (images,       (2021 TF     │
