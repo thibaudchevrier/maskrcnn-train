@@ -235,9 +235,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 `commit-msg` hook and on every PR by CI. `uv run cz commit` writes one interactively.
 
 Releases are automatic. On every merge to `main`, [commitizen](https://commitizen-tools.github.io/commitizen/)
-reads the commits since the last tag. A `feat` (minor), `fix`/`perf` (patch) or breaking change
+reads the commits since the last tag. A `feat` (minor), `fix`/`perf`/`refactor` (patch) or breaking change
 (minor while < 1.0) bumps the version in `pyproject.toml` and `uv.lock`, updates `CHANGELOG.md`,
-tags `vX.Y.Z` and publishes a GitHub Release with the changelog entry. Other types never release.
+tags `vX.Y.Z` and publishes a GitHub Release with the changelog entry. Other types (`docs`, `ci`, `test`, `build`, `chore`...) never release.
 
 The version tracks the code; model versions are tracked separately by the MLflow registry and
 `dvc.lock`.
