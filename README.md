@@ -221,12 +221,17 @@ Response, one entry per image, specified by the JSON Schema in
 ## Development
 
 ```bash
-uv run pre-commit install --hook-type pre-commit --hook-type commit-msg   # once
-make format    # ruff format + autofix, all environments
-make check     # ruff, pylint (each env), pytest (orchestration + Matterport smoke training)
+make install   # both environments
+make hooks     # once: pre-commit and commit-msg git hooks
+make format    # ruff format + autofix
+make check     # lint (all pre-commit hooks, exactly what CI runs) + tests of both environments
 ```
 
-The hooks format and lint staged Python files with ruff and check the commit message.
+Code quality is defined once, in `.pre-commit-config.yaml`: ruff (format, lint, numpy docstrings)
+and pydoclint (every parameter, return and exception documented) for all code, pylint (10/10) in
+each environment, and hygiene checks (incl. a guard against committing large files). The git hooks,
+`make lint` and CI all run it. Conventions for contributors (and for Claude Code) are in
+[`CLAUDE.md`](CLAUDE.md).
 
 ### Commits, versions and releases
 
@@ -248,7 +253,7 @@ The version tracks the code; model versions are tracked separately by the MLflow
 
 | Job | What it checks |
 |-----|----------------|
-| **Lint** | `ruff format --check`, `ruff check`, `pylint` in each environment (same as `make lint`) |
+| **Lint** | All pre-commit hooks (`make lint`): ruff, pydoclint, pylint per environment, hygiene |
 | **Unit and contract tests** | Annotations and split, MLflow wrapper; responses validated with `fashion_seg_contract.schema` |
 | **Matterport trainer** | Trains a tiny model on synthetic data and exports it (TF 2.15, Python 3.11) |
 | **ML checks** | Pulls the 2021 model and the published package from Drive, fails if `dvc.lock` is stale for `package_legacy`, runs the tests against the real model |
