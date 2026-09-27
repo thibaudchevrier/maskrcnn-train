@@ -1,0 +1,11 @@
+stages:
+  package_legacy:
+    cmd: python -m fashion_seg.package_legacy
+    deps:
+      - ${legacy_model.saved_model_dir}
+      - ${legacy_model.label_file}
+      - src/fashion_seg
+    params:
+      - legacy_model
+    outs:
+      - ${legacy_model.output_dir}

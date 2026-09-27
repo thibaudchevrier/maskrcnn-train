@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/thibaudchevrier/maskrcnn-train/contracts/prediction.schema.json",
+  "title": "Fashion segmentation prediction (one image)",
+  "description": "Contract between the model packaged by maskrcnn-train and its consumers (fashion-serving). A copy lives in both repositories: change them together. Adding optional fields is backward compatible; renaming or removing fields is not.",
+  "type": "object",
+  "required": ["height", "width", "instances"],
+  "properties": {
+    "height": {"type": "integer", "minimum": 1},
+    "width": {"type": "integer", "minimum": 1},
+    "instances": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["class_id", "label", "score", "box", "mask_rle"],
+        "properties": {
+          "class_id": {"type": "integer", "minimum": 1, "description": "Model class id; 0 is the background and never returned."},
+          "label": {"type": "string", "minLength": 1},
+          "score": {"type": "number", "minimum": 0, "maximum": 1},
+          "box": {
+            "description": "[y1, x1, y2, x2] in pixels of the input image; (y2, x2) excluded.",
+            "type": "array",
+            "items": {"type": "integer", "minimum": 0},
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "mask_rle": {
+            "description": "iMaterialist RLE: space-separated 1-indexed 'start length' pairs, column-major.",
+            "type": "string",
+            "pattern": "^([0-9]+ [0-9]+( [0-9]+ [0-9]+)*)?$"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+schema: '2.0'
+stages:
+  package_legacy:
+    cmd: python -m fashion_seg.package_legacy
+    deps:
+    - path: data/imaterialist/label_descriptions.json
+      hash: md5
+      md5: d8479cd45c24bbd73285daa5a924777d
+      size: 39023
+    - path: deployement
+      hash: md5
+      md5: d2814262190bed9dfca1b3ab6b925c2c.dir
+      size: 265710486
+      nfiles: 4
+    - path: src/fashion_seg
+      hash: md5
+      md5: f072df8596249dd276d30e3e77f4ebd7.dir
+      size: 20609
+      nfiles: 9
+    params:
+      params.yaml:
+        legacy_model:
+          saved_model_dir: deployement
+          label_file: data/imaterialist/label_descriptions.json
+          output_dir: models/fashion-maskrcnn
+          experiment: fashion-maskrcnn
+          registered_name: fashion-maskrcnn
+    outs:
+    - path: models/fashion-maskrcnn
+      hash: md5
+      md5: 0c62b94447f12ffd62cf8f7e8f96a97d.dir
+      size: 266093773
+      nfiles: 25
