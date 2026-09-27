@@ -43,7 +43,7 @@ self-contained MLflow model that
 | `src/fashion_seg/` | Source code: RLE codec, labels, Mask R-CNN pre/post-processing, MLflow wrapper, packaging script | git |
 | `data/` | iMaterialist images + `train.csv` + `label_descriptions.json` (~23.7 GB, 48k files) | DVC (`data.dvc`) |
 | `deployement/` | 2021 Matterport Mask R-CNN weights (TF SavedModel + `config.json`) | DVC (`deployement.dvc`) |
-| `mlruns/` | 2021 MLflow runs, read-only history | DVC (`mlruns.dvc`) |
+| `mlruns/` | Archive: a Nov 2024 MLflow 1.30 log of the same 2021 weights (no params or metrics) | DVC (`mlruns.dvc`) |
 | `models/fashion-maskrcnn/` | **Build output**: the packaged MLflow model consumed by fashion-serving | DVC (`dvc.lock`) |
 | `contracts/prediction.schema.json` | JSON Schema of the model's response, shared with fashion-serving | git |
 | `mlflow.db`, `mlartifacts/` | Local MLflow tracking store | not versioned |
@@ -83,7 +83,6 @@ uv sync
 uv run dvc pull deployement.dvc                              # 2021 weights (~265 MB)
 uv run dvc pull data/imaterialist/label_descriptions.json    # labels only: enough to package the model
 uv run dvc pull data.dvc                                     # full dataset (~23.7 GB, slow on Drive)
-uv run dvc pull mlruns.dvc                                   # 2021 MLflow history
 ```
 
 ## Workflow
@@ -131,11 +130,14 @@ After the merge, deploy it in fashion-serving with `dvc update` (see its README)
 
 ```bash
 make mlflow-ui            # http://localhost:5002: runs and registered model versions
-make mlflow-ui-legacy     # http://localhost:5003: 2021 Colab runs (after `uv run dvc pull mlruns.dvc`)
 ```
 
 Stop with Ctrl+C. Change the port with `make mlflow-ui MLFLOW_PORT=5010`. The defaults avoid 5000
 (AirPlay on macOS) and 5001 (fashion-serving's inference service).
+
+There is no 2021 training history in MLflow: the Colab notebook logged to TensorBoard, in Google
+Drive under `Final_project/model/train_results` (outside DVC). `mlruns/` only holds a Nov 2024 MLflow 1.30 log of the same weights as `deployement/`, in the
+old file-store format that MLflow 3 no longer opens by default. It stays in DVC as an archive.
 
 - **Experiments → `fashion-maskrcnn`**: one run per packaging, with the model settings as params.
   Training runs will add loss and mAP curves here.
