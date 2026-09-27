@@ -1,3 +1,10 @@
 # Add patterns of files dvc should ignore, which could improve
 # the performance. Learn more at
 # https://dvc.org/doc/user-guide/dvcignore
+
+# macOS metadata
+.DS_Store
+
+# Python bytecode (keeps src/ hashes stable)
+__pycache__/
+*.pyc

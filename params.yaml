@@ -1,0 +1,6 @@
+legacy_model:
+  saved_model_dir: deployement
+  label_file: data/imaterialist/label_descriptions.json
+  output_dir: models/fashion-maskrcnn
+  experiment: fashion-maskrcnn
+  registered_name: fashion-maskrcnn
