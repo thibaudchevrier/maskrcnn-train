@@ -5,7 +5,7 @@ image, sorted by ``image_id``, and stores it as Parquet so every trainer loads i
 
     image_id: str, height: int, width: int,
     class_ids: list[int]  (dataset category ids, 0-based; model class = category + 1),
-    rles: list[str]       (one RLE mask per class id, see ``fashion_seg_core.rle``)
+    rles: list[str]       (one RLE mask per class id, see ``fashion_seg_contract.rle``)
 """
 
 import json

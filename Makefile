@@ -20,7 +20,7 @@ lint:
 	uv run ruff format --check $(PY_DIRS)
 	uv run ruff check $(PY_DIRS)
 	uv run pylint src packages/core/src
-	uv run pylint tests packages/core/tests --disable=$(PYLINT_TESTS_DISABLE)
+	uv run pylint tests --disable=$(PYLINT_TESTS_DISABLE)
 	$(MATTERPORT) pylint --rcfile trainers/matterport/pyproject.toml trainers/matterport/src
 	$(MATTERPORT) pylint --rcfile trainers/matterport/pyproject.toml trainers/matterport/tests/*.py --disable=$(PYLINT_TESTS_DISABLE)
 

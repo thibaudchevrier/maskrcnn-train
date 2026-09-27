@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import polars as pl
-from fashion_seg_core import rle
+from fashion_seg_contract import rle
 from mrcnn import utils
 
 SOURCE = "fashion"

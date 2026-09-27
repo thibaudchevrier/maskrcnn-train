@@ -1,22 +1,17 @@
 import base64
 import io
-import json
 import os
 from pathlib import Path
 
-import jsonschema
 import numpy as np
 import pytest
-from fashion_seg_core import rle
+from fashion_seg_contract import rle, schema
 from PIL import Image
 
-from fashion_seg.legacy.matterport import Detections
+from fashion_seg.predictors.base import Detections
 from fashion_seg.serving.pyfunc import FashionSegmentationModel, decode_image, encode_image
 
 CLASS_NAMES = ["BG", "shirt", "pants"]
-CONTRACT = json.loads(
-    (Path(__file__).parents[1] / "contracts" / "prediction.schema.json").read_text(encoding="utf-8")
-)
 
 
 class FakePredictor:
@@ -45,19 +40,12 @@ def test_predict_formats_instances_and_filters_by_score():
     [default] = model.predict(None, _request(image))
     [strict] = model.predict(None, _request(image), params={"min_score": 0.9})
 
-    jsonschema.validate(default, CONTRACT)
+    schema.validate(default)
     assert (default["height"], default["width"]) == (20, 10)
     assert [i["label"] for i in default["instances"]] == ["shirt", "pants"]
     assert [i["label"] for i in strict["instances"]] == ["shirt"]
     mask = rle.decode(default["instances"][0]["mask_rle"], 20, 10)
     assert mask[:5, :5].all() and mask.sum() == 25
-
-
-def test_contract_rejects_breaking_changes():
-    valid = {"height": 2, "width": 2, "instances": []}
-    jsonschema.validate(valid, CONTRACT)
-    with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate({"height": 2, "width": 2, "detections": []}, CONTRACT)
 
 
 def test_decode_image_handles_grayscale_and_raw_bytes():
@@ -72,12 +60,12 @@ SAVED_MODEL = Path(os.environ.get("FASHION_SEG_SAVED_MODEL", "deployement"))
 
 @pytest.mark.skipif(not (SAVED_MODEL / "saved_model.pb").exists(), reason="legacy model not pulled")
 def test_real_saved_model_runs():
-    from fashion_seg.legacy.matterport import MatterportPredictor
+    from fashion_seg.predictors.matterport import MatterportPredictor
 
     model = FashionSegmentationModel(MatterportPredictor(SAVED_MODEL), ["BG"] + ["c"] * 46)
     image = np.random.default_rng(0).integers(0, 255, (300, 200, 3), dtype=np.uint8)
     [result] = model.predict(None, _request(image), params={"min_score": 0.0})
-    jsonschema.validate(result, CONTRACT)
+    schema.validate(result)
     assert (result["height"], result["width"]) == (300, 200)
     for inst in result["instances"]:
         assert 1 <= inst["class_id"] <= 46

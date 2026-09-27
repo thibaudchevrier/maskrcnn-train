@@ -387,6 +387,24 @@ wheels = [
 ]
 
 [[package]]
+name = "fashion-seg-contract"
+version = "0.1.0"
+source = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
+dependencies = [
+    { name = "numpy" },
+]
+wheels = [
+    { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl", hash = "sha256:ff4b470e9bc105639d3d6715b6a03198ed910f94a4d088532ae95aac4461aade" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jsonschema", marker = "extra == 'validate'", specifier = ">=4.18" },
+    { name = "numpy", specifier = ">=1.23" },
+]
+provides-extras = ["validate"]
+
+[[package]]
 name = "fashion-seg-core"
 version = "0.1.0"
 source = { editable = "../../packages/core" }
@@ -408,8 +426,9 @@ name = "fashion-seg-matterport"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "fashion-seg-contract" },
     { name = "fashion-seg-core" },
-    { name = "maskrcnn-matterport" },
+    { name = "maskrcnn-matterport", extra = ["train"] },
     { name = "pyyaml" },
 ]
 
@@ -421,8 +440,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "fashion-seg-contract", url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" },
     { name = "fashion-seg-core", editable = "../../packages/core" },
-    { name = "maskrcnn-matterport", git = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2?tag=v0.2.0" },
+    { name = "maskrcnn-matterport", extras = ["train"], url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl" },
     { name = "pyyaml" },
 ]
 
@@ -902,16 +922,39 @@ wheels = [
 
 [[package]]
 name = "maskrcnn-matterport"
-version = "0.2.0"
-source = { git = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2?tag=v0.2.0#8c6e1c7eaee8d1cbed2a85a4171ffddf0105e579" }
+version = "0.3.0"
+source = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl" }
 dependencies = [
+    { name = "numpy" },
+    { name = "scikit-image" },
+]
+wheels = [
+    { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl", hash = "sha256:1d2fe962c0f4d339c0af224eb387350fc24f9cdfd4863b991099f71c843e637d" },
+]
+
+[package.optional-dependencies]
+train = [
     { name = "h5py" },
     { name = "numpy" },
     { name = "pillow" },
-    { name = "scikit-image" },
     { name = "scipy" },
     { name = "tensorflow" },
 ]
+
+[package.metadata]
+requires-dist = [
+    { name = "h5py", marker = "extra == 'train'" },
+    { name = "ipython", marker = "extra == 'viz'" },
+    { name = "matplotlib", marker = "extra == 'viz'" },
+    { name = "numpy", specifier = ">=1.23" },
+    { name = "numpy", marker = "extra == 'train'", specifier = "<2" },
+    { name = "pillow", marker = "extra == 'train'" },
+    { name = "scikit-image", specifier = ">=0.19" },
+    { name = "scipy", marker = "extra == 'train'" },
+    { name = "tensorflow", marker = "python_full_version < '3.12' and extra == 'train'", specifier = ">=2.15,<2.16" },
+    { name = "tensorflow", marker = "extra == 'serve'", specifier = ">=2.15" },
+]
+provides-extras = ["serve", "train", "viz"]
 
 [[package]]
 name = "matplotlib"

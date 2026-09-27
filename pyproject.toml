@@ -5,13 +5,14 @@ description = "Fashion instance segmentation on iMaterialist: data pipeline, tra
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "fashion-seg-contract",
     "fashion-seg-core",
+    "maskrcnn-matterport",
     "mlflow>=3.16,<3.17",
     "numpy>=2.5.3",
     "polars>=1.20",
     "pillow>=12.3.0",
     "pyyaml>=6.0.3",
-    "scikit-image>=0.26.0",
     "scikit-learn>=1.5",
     "tensorflow>=2.18",
 ]
@@ -21,6 +22,9 @@ members = ["packages/core"]
 
 [tool.uv.sources]
 fashion-seg-core = { workspace = true }
+# Released wheels, referenced by URL like packages from a registry (GitHub Releases).
+fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
+maskrcnn-matterport = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl" }
 
 [build-system]
 requires = ["hatchling"]
@@ -36,7 +40,7 @@ line-length = 100
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "packages/core/tests"]
+testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
