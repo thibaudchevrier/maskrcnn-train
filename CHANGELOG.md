@@ -1,3 +1,9 @@
+## v0.4.1 (2026-09-28)
+
+### Refactor
+
+- remove duplicated and unused code
+
 ## v0.4.0 (2026-09-28)
 
 ### BREAKING CHANGE

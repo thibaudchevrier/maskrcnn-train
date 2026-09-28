@@ -3,7 +3,7 @@
 # and families/<name> (one uv project per model family, with its own Python and framework).
 [project]
 name = "fashion-seg-train"
-version = "0.4.0"
+version = "0.4.1"
 description = "Fashion instance segmentation on iMaterialist: data pipeline, training of several models, MLflow packaging"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
