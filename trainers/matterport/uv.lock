@@ -442,7 +442,7 @@ dev = [
 requires-dist = [
     { name = "fashion-seg-contract", url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" },
     { name = "fashion-seg-core", editable = "../../packages/core" },
-    { name = "maskrcnn-matterport", extras = ["train"], url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl" },
+    { name = "maskrcnn-matterport", extras = ["train"], url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl" },
     { name = "pyyaml" },
 ]
 
@@ -922,14 +922,14 @@ wheels = [
 
 [[package]]
 name = "maskrcnn-matterport"
-version = "0.3.0"
-source = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl" }
+version = "0.3.1"
+source = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl" }
 dependencies = [
     { name = "numpy" },
     { name = "scikit-image" },
 ]
 wheels = [
-    { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl", hash = "sha256:1d2fe962c0f4d339c0af224eb387350fc24f9cdfd4863b991099f71c843e637d" },
+    { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl", hash = "sha256:0cd33f2892fa3aaf9daff7a2818fb8d2fd338f618c6ebd465949a12134e34ab3" },
 ]
 
 [package.optional-dependencies]
