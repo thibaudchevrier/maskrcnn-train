@@ -20,3 +20,6 @@ __pycache__/
 
 .DS_Store
 /prepared
+
+# Quick (subset) evaluations: not the tracked result
+/metrics/evaluate-quick.json

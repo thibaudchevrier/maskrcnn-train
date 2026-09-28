@@ -45,3 +45,21 @@ stages:
           - tool.uv.sources
     outs:
       - ${legacy_model.output_dir}
+
+  evaluate:
+    cmd: python -m fashion_seg.evaluate
+    deps:
+      - ${evaluate.model_dir}
+      # prepared/ follows the dataset version. The images are read from data/ but pulled
+      # separately (make pull-val), so they are not a dependency: a partial pull would record
+      # the hash of whatever subset is on disk.
+      - ${data.prepared_dir}
+      - src/fashion_seg/evaluate.py
+    params:
+      - data.prepared_dir
+      - data.train_images
+      - data.label_file
+      - evaluate
+    metrics:
+      - ${evaluate.output}:
+          cache: false

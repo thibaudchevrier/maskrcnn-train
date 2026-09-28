@@ -77,6 +77,7 @@ data/imaterialist/train.csv ─► prepare ─► prepared/ ─┐
 data/imaterialist/train/ ────────────────────────────┼─► train_matterport ─► outputs/matterport/
 weights/mask_rcnn_coco.h5 ───────────────────────────┘
 deployement/ + labels ──────────────────────────────────► package_legacy ──► models/fashion-maskrcnn/
+models/fashion-maskrcnn/ + prepared/ + val images ──────► evaluate ────────► metrics/evaluate.json
 ```
 
 | Stage | Environment | What it does |
@@ -84,6 +85,7 @@ deployement/ + labels ───────────────────�
 | `prepare` | orchestration | Groups `train.csv` (333k masks) into one row per image, and writes the frozen split: images sorted by id, `KFold(8, shuffle, seed 42)`, fold 0 = validation (39,920 train / 5,703 val), the procedure of the 2021 notebook |
 | `train_matterport` | `trainers/matterport` | Starts from COCO weights, trains with the 2021 notebook's settings (`params.yaml:train_matterport`), logs every epoch's losses to the MLflow experiment `fashion-seg-training`, exports the inference model and `metrics.json` |
 | `package_legacy` | orchestration | Wraps the 2021 model as an MLflow pyfunc model, registers a new `fashion-maskrcnn` version, writes `models/fashion-maskrcnn/` |
+| `evaluate` | orchestration | Loads the packaged model as it is served, predicts the validation split, computes COCO mask and box mAP (plus AP50, AP75, recall, per-class AP) with pycocotools; logs to the MLflow experiment `fashion-seg-evaluation`, tags the registered model version (`val_mask_map`...), writes `metrics/evaluate.json` |
 
 Each stage re-runs only when its inputs (files, code, `params.yaml` section) changed since `dvc.lock`.
 
@@ -151,6 +153,22 @@ git add -A && git commit -m "..." && git push   # open a PR; CI checks lint, tes
 ```
 
 After the merge, deploy it in fashion-serving with `dvc update` (see its README).
+
+### Evaluate the packaged model
+
+```bash
+make pull-val                                   # the 5,703 validation images (~3 GB)
+uv run dvc repro --single-item evaluate         # whole split (~2 h on CPU), tracked by DVC
+uv run dvc metrics show                         # mask_map, box_map, ...
+
+VAL_IMAGES=200 make pull-val && make evaluate-quick   # 200 images, ~5 min, not tracked by DVC
+```
+
+The model is loaded from `models/<name>` exactly as fashion-serving loads it, so the score describes
+the deployed model, whatever its framework. Each run is logged to MLflow (`fashion-seg-evaluation`)
+with the per-class AP table as an artifact; a whole-split run also tags the registered model
+version, so the registry shows its score. Quick runs write `metrics/evaluate-quick.json` and don't
+tag the registry.
 
 ### Browse experiments
 
@@ -271,11 +289,9 @@ Testing):
 
 ## Roadmap
 
-1. **`evaluate` stage**: one COCO mask-mAP evaluator on the validation split for every model,
-   including the 2021 model as baseline. Metrics to MLflow and `dvc metrics`.
-2. **Generic `package` stage**: package the best evaluated model (not only the 2021 one) and mark it
+1. **Generic `package` stage**: package the best evaluated model (not only the 2021 one) and mark it
    `@champion` in the MLflow registry; CI comments `dvc metrics diff` on the PR.
-3. **torchvision trainer** (`trainers/torchvision/`, PyTorch, runs on Apple Silicon GPUs).
-4. **2021 model anchors**: its exported `config.json` uses anchor scales 32–512 while it was trained
-   with 16–256; the evaluation stage will tell whether correcting it improves the baseline.
-5. **Augmentation** for the Matterport trainer (imgaug is unmaintained; needs a compatible substitute).
+2. **torchvision trainer** (`trainers/torchvision/`, PyTorch, runs on Apple Silicon GPUs).
+3. **2021 model anchors**: its exported `config.json` uses anchor scales 32–512 while it was trained
+   with 16–256. On 200 validation images, correcting them raises mask mAP from 0.025 to 0.039.
+4. **Augmentation** for the Matterport trainer (imgaug is unmaintained; needs a compatible substitute).
