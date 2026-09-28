@@ -25,7 +25,7 @@ members = ["packages/core"]
 fashion-seg-core = { workspace = true }
 # Released wheels, referenced by URL like packages from a registry (GitHub Releases).
 fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
-maskrcnn-matterport = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl" }
+maskrcnn-matterport = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl" }
 
 [build-system]
 requires = ["hatchling"]

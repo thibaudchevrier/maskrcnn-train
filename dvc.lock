@@ -34,11 +34,11 @@ stages:
               https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl
           maskrcnn-matterport:
             url: 
-              https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.0/maskrcnn_matterport-0.3.0-py3-none-any.whl
+              https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl
     outs:
     - path: models/fashion-maskrcnn
       hash: md5
-      md5: d0f771fe5f266f8259c02e2b6f2bf1ea.dir
+      md5: a4077b61f9236901d4229273e32b1de3.dir
       size: 266128543
       nfiles: 25
   prepare:
