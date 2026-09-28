@@ -1,5 +1,6 @@
 """Tests of the workflow steps with in-memory infrastructure: no MLflow, no model files."""
 
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -152,14 +153,14 @@ def test_training_records_the_run_and_the_family_metrics(params, tmp_path):
     config = TrainConfig(output_dir=tmp_path / "out", init_weights=tmp_path, epochs=1)
 
     # pylint: disable-next=unused-argument  # the family's signature
-    def train(cfg, inputs, log_metrics):
+    def train(cfg, inputs, session):
         """Report one training loss and the final validation loss."""
-        log_metrics({"loss": 0.5}, step=1)
+        session.log_metrics({"loss": 0.5}, step=1)
         return TrainResult(metrics={"val_loss": 0.4}, tags={"device": "cpu"})
 
     family = SimpleNamespace(SPEC=SimpleNamespace(name="fake"), train=train)
     tracker = FakeTracker()
-    result = training.train(family, config, params, tracker)
+    result = training.train(family, config, params, Infrastructure(tracker, FakeRepository(1, 1)))
 
     [run] = tracker.runs
     assert result.metrics == {"val_loss": 0.4}
@@ -186,3 +187,25 @@ def test_packaging_publishes_the_wrapper_and_family_requirements(params):
     assert any(r.startswith("fashion-seg-contract @ ") for r in package.requirements)
     assert [p.name for p in package.code_dirs] == ["fashion_seg", "numpy"]
     assert tracker.runs[0]["params"] == {"model.layers": 3}
+
+
+def test_a_stopped_training_is_tagged_and_its_export_not_logged(params, tmp_path):
+    """The family sees the stop signal; a stopped run is tagged and logs no export."""
+    config = TrainConfig(output_dir=tmp_path / "out", init_weights=tmp_path, epochs=1)
+    stop = threading.Event()
+    stop.set()
+
+    # pylint: disable-next=unused-argument  # the family's signature
+    def train(cfg, inputs, session):
+        """Stop at once when asked, as a family does after checkpointing."""
+        assert session.stop.is_set()
+        return TrainResult(metrics={}, tags={}, stopped_at=12)
+
+    family = SimpleNamespace(SPEC=SimpleNamespace(name="fake"), train=train)
+    tracker = FakeTracker()
+    infra = Infrastructure(tracker, FakeRepository(1, 1), stop)
+    result = training.train(family, config, params, infra)
+
+    [run] = tracker.runs
+    assert result.stopped_at == 12
+    assert run["tags"]["stopped_at_step"] == "12" and run["artifacts"] == []

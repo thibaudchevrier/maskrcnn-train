@@ -18,9 +18,9 @@ from typing import Any
 
 from fashion_seg.ports import (
     FamilySpec,
-    MetricLogger,
     Predictor,
     ServingRequirements,
+    TrainingSession,
     TrainInputs,
     TrainResult,
 )
@@ -37,7 +37,7 @@ SPEC = FamilySpec(
 )
 
 
-def train(config: Config, inputs: TrainInputs, log_metrics: MetricLogger) -> TrainResult:
+def train(config: Config, inputs: TrainInputs, session: TrainingSession) -> TrainResult:
     """Fine-tune Mask R-CNN v2 and export it (see ``training.train``).
 
     Parameters
@@ -46,18 +46,18 @@ def train(config: Config, inputs: TrainInputs, log_metrics: MetricLogger) -> Tra
         Training parameters.
     inputs : TrainInputs
         Data, and where to write.
-    log_metrics : MetricLogger
-        Records metrics during training.
+    session : TrainingSession
+        Records metrics; tells when to stop.
 
     Returns
     -------
     TrainResult
-        Last validation losses, and run tags.
+        Last validation losses and run tags, or where it stopped.
     """
     # pylint: disable-next=import-outside-toplevel  # PyTorch loads only when training
     from fashion_seg_torchvision import training
 
-    return training.train(config, inputs, log_metrics)
+    return training.train(config, inputs, session)
 
 
 def load_predictor(model_dir: Path) -> Predictor:

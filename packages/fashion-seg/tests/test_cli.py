@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import Any, ClassVar
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from fashion_seg.cli import main
@@ -27,15 +28,17 @@ class FakeConfig(TrainConfig):
     """
 
     width: int
-    smoke_overrides: ClassVar[dict[str, Any]] = {"epochs": 1, "width": 2}
+    smoke_overrides: ClassVar[dict[str, Any]] = {"epochs": 1}
 
 
 def _fake_family(calls: list) -> SimpleNamespace:
     """Build a family recording its calls: a duck-typed ModelFamily, like a family module."""
 
-    def train(config: FakeConfig, inputs: TrainInputs, log_metrics) -> TrainResult:
+    def train(config: FakeConfig, inputs: TrainInputs, session) -> TrainResult:
         calls.append((config, inputs))
-        log_metrics({"loss": 1.0}, step=1)
+        session.log_metrics({"loss": 1.0}, step=1)
+        if config.width == 99:  # stands for a stop request during the training
+            return TrainResult(metrics={}, tags={}, stopped_at=1)
         inputs.export_dir.mkdir(parents=True)
         return TrainResult(metrics={"val_loss": 0.5}, tags={"device": "cpu"})
 
@@ -72,7 +75,7 @@ def test_train_runs_the_injected_family_through_the_service(params_file):
     main(_fake_family(calls), ["--params", str(params_file), "train", "--smoke"])
 
     [(config, inputs)] = calls
-    assert (config.epochs, config.width) == (1, 2)  # smoke overrides
+    assert config.epochs == 1  # smoke overrides
     assert inputs.train.height == 2 and inputs.val.height == 1
     assert len(inputs.class_names) == 47
     out = params_file.parent / "out" / "fake-smoke"
@@ -110,5 +113,15 @@ def test_smoke_runs_write_next_to_the_real_output(tmp_path):
     """Smoke runs apply the overrides and use their own directory."""
     config = FakeConfig(output_dir=tmp_path / "fake", init_weights=Path("w"), epochs=9, width=3)
     smoke = smoke_config(config)
-    assert (smoke.epochs, smoke.width) == (1, 2)
+    assert (smoke.epochs, smoke.width) == (1, 3)  # overridden, kept
     assert output_dir_of(smoke, smoke=True) == tmp_path / "fake-smoke"
+
+
+def test_a_stopped_training_exits_without_metrics(params_file):
+    """A family that stopped early makes train exit non-zero, asking to resume, no metrics.json."""
+    params = yaml.safe_load(params_file.read_text())
+    params["train"]["fake"]["width"] = 99
+    params_file.write_text(yaml.safe_dump(params))
+    with pytest.raises(SystemExit, match="Stopped at step 1"):
+        main(_fake_family([]), ["--params", str(params_file), "train", "--smoke"])
+    assert not (params_file.parent / "out" / "fake-smoke" / "metrics.json").exists()

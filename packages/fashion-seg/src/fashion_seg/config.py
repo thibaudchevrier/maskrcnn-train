@@ -91,7 +91,9 @@ class TrackingConfig(Frozen):
 class TrainConfig(Frozen):
     """Training parameters every model family has (``train.<family>`` section).
 
-    A family subclasses it with its own parameters and smoke overrides.
+    A family subclasses it with its own parameters and smoke overrides. Every family checkpoints
+    every ``checkpoint_every`` steps and resumes from its last checkpoint (``resume``), so a
+    training can be stopped (Ctrl+C, SIGTERM) and continued later.
 
     Attributes
     ----------
@@ -105,6 +107,16 @@ class TrainConfig(Frozen):
         Use only the first training images of the split; ``None`` for all.
     max_val_images : int | None
         Use only the first validation images of the split; ``None`` for all.
+    resume : bool
+        Continue from the last checkpoint in ``output_dir/checkpoints`` if there is one.
+        By default ``True``.
+    checkpoint_every : int
+        Steps between two checkpoints: the most a stop, a crash or a power cut can lose.
+        By default 500.
+    log_every : int
+        Steps between two logs of the training losses. By default 50.
+    seed : int
+        Seed of the training images' shuffle order. By default 0.
     smoke_overrides : ClassVar[dict[str, Any]]
         Parameters replaced for a smoke run (``--smoke``): tiny and fast, checks the whole chain,
         not model quality.
@@ -115,6 +127,10 @@ class TrainConfig(Frozen):
     epochs: int
     max_train_images: int | None = None
     max_val_images: int | None = None
+    resume: bool = True
+    checkpoint_every: int = 500
+    log_every: int = 50
+    seed: int = 0
     smoke_overrides: ClassVar[dict[str, Any]] = {}
 
 

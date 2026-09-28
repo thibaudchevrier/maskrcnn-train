@@ -182,8 +182,29 @@ uv run dvc repro --single-item evaluate_torchvision      # compare with evaluate
 ```
 
 Measured on an M4 Pro: 0.8 s per step (2 images, 1024 px) on the Apple GPU, 4.9 s on the CPU, so
-about 5 hours per epoch (~20,000 steps). Checkpoints are written after each epoch: with
-`resume: true`, re-running the stage continues an interrupted training.
+about 5 hours per epoch (~20,000 steps). For a long run, use the background targets (any family, `FAMILY=torchvision` by default):
+
+```bash
+make train FAMILY=torchvision   # dvc repro train_<family> in the background (survives the
+                                # terminal, keeps the Mac awake; closing the lid still sleeps it)
+make train-log                  # follow it (losses every 50 steps); MLflow: make mlflow-ui
+make train-stop                 # finish the current step, save a checkpoint, stop
+make train                      # resume where it stopped, even mid-epoch
+```
+
+Every family shares this behaviour (`params.yaml:train.<family>`: `checkpoint_every`, `resume`,
+`log_every`, `seed`): a checkpoint every 500 steps (~7 minutes for torchvision on the Apple GPU)
+and at each epoch's end, so a stop, a crash or a power cut loses at most that. Each session is its
+own MLflow run, with the step counter continuing: select them together to see the whole curve,
+or find a stopped one by its `stopped_at_step` tag. To start over instead, delete
+`outputs/<family>/checkpoints`.
+
+- **torchvision** resumes exactly: each epoch's shuffle order is reproducible
+  (`fashion_seg.progress.epoch_order`), so it skips the images already trained on. Changing
+  `epochs` while resuming changes the learning-rate schedule (cosine over the new total).
+- **Matterport** finishes the interrupted epoch with its remaining steps, then continues; that
+  remainder draws a new shuffle and the SGD momentum restarts, because the fork shuffles with
+  numpy's global generator and saves weights only.
 
 **Matterport** (the 2021 model's architecture; TensorFlow 2.15, CPU-only on a Mac):
 

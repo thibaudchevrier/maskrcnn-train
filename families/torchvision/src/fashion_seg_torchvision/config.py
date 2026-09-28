@@ -26,12 +26,8 @@ class Config(TrainConfig):
         Steps of linear warm-up, before the cosine decay.
     num_workers : int
         Data loading processes.
-    log_every : int
-        Steps between two logs of the training losses.
     device : Literal["auto", "cuda", "mps", "cpu"]
         ``"auto"``: CUDA, then Apple GPU (MPS), then CPU. By default ``"auto"``.
-    resume : bool
-        Continue from the last checkpoint if there is one. By default ``True``.
     smoke_overrides : ClassVar[dict[str, Any]]
         Parameters replaced for a smoke run.
     """
@@ -44,9 +40,7 @@ class Config(TrainConfig):
     weight_decay: float
     warmup_steps: int
     num_workers: int
-    log_every: int
     device: Literal["auto", "cuda", "mps", "cpu"] = "auto"
-    resume: bool = True
     smoke_overrides: ClassVar[dict[str, Any]] = {
         "min_size": 256,
         "max_size": 320,

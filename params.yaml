@@ -39,6 +39,10 @@ train:
     steps_per_epoch: null        # null = one pass over the training images
     validation_steps: null
     detection_min_confidence: 0.7
+    log_every: 50
+    checkpoint_every: 500        # a stop, crash or power cut loses at most this many steps
+    seed: 0                      # numpy seed of the fork's shuffle and ROI sampling
+    resume: true                 # continue from checkpoints/last.h5 if present
 
   # torchvision Mask R-CNN v2, fine-tuned from COCO.
   torchvision:
@@ -56,6 +60,8 @@ train:
     warmup_steps: 1000
     num_workers: 4
     log_every: 50
+    checkpoint_every: 500     # ~7 min on the Apple GPU: the most a stop can lose
+    seed: 0                   # shuffle order: reproducible, so a stopped run resumes mid-epoch
     device: auto              # CUDA, then Apple GPU (MPS), then CPU
     resume: true              # continue from checkpoints/last.pt if present
 

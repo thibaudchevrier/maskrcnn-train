@@ -24,10 +24,11 @@ import argparse
 import json
 import logging
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
-from fashion_seg.adapters import mlflow_models, mlflow_tracking
+from fashion_seg.adapters import mlflow_models, mlflow_tracking, signals
 from fashion_seg.config import PackagedModel, Params, load_params
 from fashion_seg.ports import Infrastructure, ModelFamily
 from fashion_seg.service import evaluation, packaging, training
@@ -107,6 +108,36 @@ def write_json(path: Path, content: dict[str, Any]) -> None:
     path.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
 
 
+def run_train(family: ModelFamily, args: argparse.Namespace, params: Params) -> None:
+    """Train a family, stoppable with Ctrl+C or SIGTERM, then write ``metrics.json``.
+
+    Parameters
+    ----------
+    family : ModelFamily
+        The model family.
+    args : argparse.Namespace
+        Parsed ``train`` arguments.
+    params : Params
+        The pipeline parameters.
+
+    Raises
+    ------
+    SystemExit
+        If the training was stopped: a checkpoint is saved, running the command again resumes.
+    """
+    config = family.Config.model_validate(params.train[family.SPEC.name])
+    with signals.stop_on_signal() as stop:  # only here: other commands stop on Ctrl+C as usual
+        infra = Infrastructure(mlflow_tracking, mlflow_models, stop)
+        result = training.train(family, config, params, infra, smoke=args.smoke)
+    if result.stopped_at is not None:
+        raise SystemExit(
+            f"Stopped at step {result.stopped_at}, checkpoint saved: "
+            "run the same command to resume."
+        )
+    write_json(training.output_dir_of(config, args.smoke) / "metrics.json", result.metrics)
+    logger.info("Trained %s: %s", family.SPEC.name, result.metrics)
+
+
 def run_command(family: ModelFamily, args: argparse.Namespace, params: Params) -> None:
     """Run one command, with the MLflow infrastructure.
 
@@ -119,14 +150,11 @@ def run_command(family: ModelFamily, args: argparse.Namespace, params: Params) -
     params : Params
         The pipeline parameters.
     """
-    infra = Infrastructure(tracker=mlflow_tracking, repository=mlflow_models)
-    name = family.SPEC.name
     if args.command == "train":
-        config = family.Config.model_validate(params.train[name])
-        result = training.train(family, config, params, infra.tracker, smoke=args.smoke)
-        write_json(training.output_dir_of(config, args.smoke) / "metrics.json", result.metrics)
-        logger.info("Trained %s: %s", name, result.metrics)
-    elif args.command == "package":
+        run_train(family, args, params)
+        return
+    infra = Infrastructure(mlflow_tracking, mlflow_models, threading.Event())
+    if args.command == "package":
         model = served_model(family, params, args.model)
         provenance = packaging.package(family, args.model, model, params, infra)
         logger.info(
