@@ -1,3 +1,9 @@
+## v0.4.2 (2026-09-28)
+
+### Refactor
+
+- infrastructure behind ports, pure logic apart from I/O
+
 ## v0.4.1 (2026-09-28)
 
 ### Refactor
