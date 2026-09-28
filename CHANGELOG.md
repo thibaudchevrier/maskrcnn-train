@@ -1,3 +1,9 @@
+## v0.3.0 (2026-09-28)
+
+### Feat
+
+- **torchvision**: torchvision Mask R-CNN v2 trainer and generic packaging
+
 ## v0.2.1 (2026-09-28)
 
 ### Fix
