@@ -1,7 +1,7 @@
 schema: '2.0'
 stages:
   package_legacy:
-    cmd: python -m fashion_seg.package_legacy
+    cmd: python -m fashion_seg.package legacy_model
     deps:
     - path: data/imaterialist/label_descriptions.json
       hash: md5
@@ -14,13 +14,14 @@ stages:
       nfiles: 4
     - path: src/fashion_seg
       hash: md5
-      md5: c185d633c689decf6ec2fd5e64cc2be7.dir
-      size: 32380
-      nfiles: 9
+      md5: 500c494a1b98891a8a4cae9a4f1171c1.dir
+      size: 39985
+      nfiles: 10
     params:
       params.yaml:
         legacy_model:
-          saved_model_dir: deployement
+          family: matterport
+          model_dir: deployement
           label_file: data/imaterialist/label_descriptions.json
           output_dir: models/fashion-maskrcnn
           experiment: fashion-maskrcnn
@@ -29,18 +30,20 @@ stages:
         tool.uv.sources:
           fashion-seg-core:
             workspace: true
+          fashion-seg-torchvision:
+            workspace: true
+          torch:
+          - index: pytorch-cpu
+            marker: sys_platform == 'linux'
+          torchvision:
+          - index: pytorch-cpu
+            marker: sys_platform == 'linux'
           fashion-seg-contract:
             url: 
               https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl
           maskrcnn-matterport:
             url: 
               https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl
-    outs:
-    - path: models/fashion-maskrcnn
-      hash: md5
-      md5: a4077b61f9236901d4229273e32b1de3.dir
-      size: 266128543
-      nfiles: 25
   prepare:
     cmd: python -m fashion_seg.prepare
     deps:

@@ -4,7 +4,7 @@ MATTERPORT = uv run --project trainers/matterport
 MLFLOW_PORT ?= 5002
 SAMPLE_IMAGES ?= 12
 
-.PHONY: install hooks format lint test check mlflow-ui prepare pull-sample pull-val train-matterport-smoke evaluate-quick
+.PHONY: install hooks format lint test check mlflow-ui prepare pull-sample pull-val train-matterport-smoke train-torchvision-smoke evaluate-quick
 
 install:
 	uv sync --locked
@@ -43,9 +43,16 @@ VAL_IMAGES ?=
 pull-val:
 	uv run python -c "from fashion_seg_core.annotations import load_split as s; ids = s('prepared/split.json')['val']; n = '$(VAL_IMAGES)'; ids = ids[:int(n)] if n else ids; print('\n'.join(f'data/imaterialist/train/{i}.jpg' for i in ids))" | xargs -n 500 uv run dvc pull
 
-# Score the packaged model on the first 200 pulled val images (not tracked by DVC, no registry tags).
+# Score a packaged model (MODEL=legacy|torchvision) on the first 200 pulled val images
+# (not tracked by DVC, no registry tags).
+MODEL ?= legacy
 evaluate-quick:
-	TF_CPP_MIN_LOG_LEVEL=3 uv run python -m fashion_seg.evaluate --max-images 200 --output metrics/evaluate-quick.json
+	TF_CPP_MIN_LOG_LEVEL=3 MLFLOW_DISABLE_AGENT_HINT=1 uv run python -m fashion_seg.evaluate --model $(MODEL) --max-images 200 --output metrics/evaluate-$(MODEL)-quick.json
+
+# Tiny torchvision run on the pulled images (Apple GPU if available): checks data, training,
+# checkpointing, MLflow logging and export.
+train-torchvision-smoke:
+	MLFLOW_DISABLE_AGENT_HINT=1 uv run python -m fashion_seg_torchvision.train --smoke
 
 # Tiny Matterport run on the pulled images: checks data, training, MLflow logging and export.
 train-matterport-smoke:

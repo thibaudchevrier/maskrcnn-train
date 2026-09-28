@@ -107,12 +107,47 @@ def format_detections(
     return {"height": int(image_shape[0]), "width": int(image_shape[1]), "instances": instances}
 
 
+def load_predictor(family: str, model_dir: str) -> Predictor:
+    """Load the predictor of a model family, importing only that family's framework.
+
+    A packaged model's environment only has its own framework (TensorFlow or PyTorch).
+
+    Parameters
+    ----------
+    family : str
+        ``"matterport"`` or ``"torchvision"``.
+    model_dir : str
+        The model's export directory.
+
+    Returns
+    -------
+    Predictor
+        The loaded predictor.
+
+    Raises
+    ------
+    ValueError
+        If the family is unknown.
+    """
+    # pylint: disable=import-outside-toplevel  # each family imports its own framework, lazily
+    if family == "matterport":
+        from fashion_seg.predictors.matterport import MatterportPredictor
+
+        return MatterportPredictor(model_dir)
+    if family == "torchvision":
+        from fashion_seg.predictors.torchvision import TorchvisionPredictor
+
+        return TorchvisionPredictor(model_dir)
+    raise ValueError(f"Unknown predictor family {family!r}: expected matterport or torchvision")
+
+
 # pylint: disable-next=abstract-method  # predict_stream is optional: this model doesn't stream
 class FashionSegmentationModel(mlflow.pyfunc.PythonModel):
     """MLflow pyfunc model: base64 images in, contract predictions out.
 
-    MLflow builds it from the model's artifacts with ``load_context``: ``saved_model`` (Matterport
-    export directory) and ``labels`` (``label_descriptions.json``). Tests inject a predictor.
+    MLflow builds it with ``load_context`` from the model's artifacts, ``model`` (export
+    directory) and ``labels`` (``label_descriptions.json``), and its ``model_config``
+    (``predictor``: the model family). Tests inject a predictor.
 
     Parameters
     ----------
@@ -133,12 +168,11 @@ class FashionSegmentationModel(mlflow.pyfunc.PythonModel):
         Parameters
         ----------
         context : mlflow.pyfunc.PythonModelContext
-            Gives the local paths of the ``saved_model`` and ``labels`` artifacts.
+            Gives the local paths of the ``model`` and ``labels`` artifacts, and the
+            ``model_config`` naming the predictor family (``"matterport"`` by default).
         """
-        # pylint: disable-next=import-outside-toplevel  # TensorFlow loads only with a real model
-        from fashion_seg.predictors.matterport import MatterportPredictor
-
-        self._predictor = MatterportPredictor(context.artifacts["saved_model"])
+        family = (context.model_config or {}).get("predictor", "matterport")
+        self._predictor = load_predictor(family, context.artifacts["model"])
         self._class_names = load_class_names(context.artifacts["labels"])
 
     def predict(

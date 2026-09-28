@@ -33,9 +33,9 @@ stages:
           cache: false
 
   package_legacy:
-    cmd: python -m fashion_seg.package_legacy
+    cmd: python -m fashion_seg.package legacy_model
     deps:
-      - ${legacy_model.saved_model_dir}
+      - ${legacy_model.model_dir}
       - ${legacy_model.label_file}
       - src/fashion_seg
     params:
@@ -43,23 +43,56 @@ stages:
       # Pinned wheels of fashion-seg-contract / maskrcnn-matterport: the model's requirements.
       - pyproject.toml:
           - tool.uv.sources
+
+  train_torchvision:
+    cmd: python -m fashion_seg_torchvision.train
+    deps:
+      - ${data.prepared_dir}
+      - ${data.train_images}
+      - ${data.label_file}
+      - ${train_torchvision.init_weights}
+      - trainers/torchvision/src
+      - packages/core/src/fashion_seg_core
+    params:
+      - data
+      - split
+      - train_torchvision
     outs:
-      - ${legacy_model.output_dir}
+      - ${train_torchvision.output_dir}/model
+    metrics:
+      - ${train_torchvision.output_dir}/metrics.json:
+          cache: false
+
+  package_torchvision:
+    cmd: python -m fashion_seg.package torchvision_model
+    deps:
+      - ${torchvision_model.model_dir}
+      - ${torchvision_model.label_file}
+      - src/fashion_seg
+      - trainers/torchvision/src/fashion_seg_torchvision/model.py
+    params:
+      - torchvision_model
+      - pyproject.toml:
+          - tool.uv.sources
+    outs:
+      - ${torchvision_model.output_dir}
 
   evaluate:
-    cmd: python -m fashion_seg.evaluate
-    deps:
-      - ${evaluate.model_dir}
-      # prepared/ follows the dataset version. The images are read from data/ but pulled
-      # separately (make pull-val), so they are not a dependency: a partial pull would record
-      # the hash of whatever subset is on disk.
-      - ${data.prepared_dir}
-      - src/fashion_seg/evaluate.py
-    params:
-      - data.prepared_dir
-      - data.train_images
-      - data.label_file
-      - evaluate
-    metrics:
-      - ${evaluate.output}:
-          cache: false
+    foreach: ${evaluate.models}
+    do:
+      cmd: python -m fashion_seg.evaluate --model ${key}
+      deps:
+        - ${item}
+        # prepared/ follows the dataset version. The images are read from data/ but pulled
+        # separately (make pull-val), so they are not a dependency: a partial pull would record
+        # the hash of whatever subset is on disk.
+        - ${data.prepared_dir}
+        - src/fashion_seg/evaluate.py
+      params:
+        - data.prepared_dir
+        - data.train_images
+        - data.label_file
+        - evaluate
+      metrics:
+        - ${evaluate.output_dir}/evaluate-${key}.json:
+            cache: false

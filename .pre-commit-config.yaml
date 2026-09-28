@@ -41,7 +41,7 @@ repos:
         entry: uv run --no-sync pylint
         language: system
         types: [python]
-        files: ^(src|packages/core/src)/
+        files: ^(src|packages/core/src|trainers/torchvision/src)/
       # Tests: pytest fixtures shadow names (redefined-outer-name); pylint infers the length of lists
       # from their empty literal, so `[result] = model.predict(...)` is a false positive.
       - id: pylint-tests
@@ -49,7 +49,7 @@ repos:
         entry: uv run --no-sync pylint --disable=redefined-outer-name,unbalanced-tuple-unpacking
         language: system
         types: [python]
-        files: ^tests/
+        files: ^(tests|trainers/torchvision/tests)/
       - id: pylint-matterport
         name: pylint (Matterport trainer env)
         entry: >-

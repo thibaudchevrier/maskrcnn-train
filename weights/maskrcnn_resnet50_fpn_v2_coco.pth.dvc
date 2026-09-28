@@ -1,0 +1,13 @@
+md5: c28adef75eabf1615d8e562c1b21fc13
+frozen: true
+deps:
+- checksum: '"50f018741b661a5ae20a820650a343a5-11"'
+  size: 185828065
+  hash: md5
+  path: 
+    https://download.pytorch.org/models/maskrcnn_resnet50_fpn_v2_coco-73cbd019.pth
+outs:
+- md5: 93719a2395e516611c7b392cb0037ae3
+  size: 185828065
+  hash: md5
+  path: maskrcnn_resnet50_fpn_v2_coco.pth
