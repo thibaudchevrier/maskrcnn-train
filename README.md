@@ -49,7 +49,6 @@ imports and serves.
 | `models/fashion-maskrcnn/` | **Build output**: the packaged 2021 model, the one fashion-serving imports today | DVC (`package_legacy` stage) |
 | `models/fashion-maskrcnn-torchvision/` | **Build output**: the packaged torchvision model | DVC (`package_torchvision` stage) |
 | `metrics/` | Evaluation scores of each packaged model | git (`evaluate_<model>` stage) |
-| `mlruns/` | Archive: a Nov 2024 MLflow 1.30 log of the 2021 weights (no params or metrics) | DVC (`mlruns.dvc`) |
 | `mlflow.db`, `mlartifacts/` | Local MLflow tracking store | not versioned |
 
 The deployed model is still the 2021 one, re-packaged: TensorFlow 2.21 loads its SavedModel, and

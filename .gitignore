@@ -1,15 +1,18 @@
 # DVC-tracked data and models
 /data
 /deployement
-/mlruns
 
 # Training scratch: checkpoints and smoke runs (outputs/*/model is DVC-tracked)
 /outputs/*/checkpoints
 /outputs/*-smoke
+# Logs of background runs (make train, pulls, MLflow UI)
+/outputs/*.log
 
 # Local MLflow tracking (experiments are logged here, the chosen model is exported to DVC)
 /mlflow.db
 /mlartifacts
+# MLflow's default store when no tracking URI is set: never the project's
+/mlruns
 
 # Python
 .venv/
