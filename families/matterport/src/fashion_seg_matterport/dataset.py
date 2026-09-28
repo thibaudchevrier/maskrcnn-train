@@ -59,18 +59,3 @@ class FashionDataset(utils.Dataset):
         height, width = info["height"], info["width"]
         masks = np.stack([rle.decode(r, height, width) for r in info["rles"]], axis=-1)
         return masks, np.array([c + 1 for c in info["categories"]], dtype=np.int32)
-
-    def image_reference(self, image_id: int) -> str:
-        """Locate the file of an image, for debugging and visualization.
-
-        Parameters
-        ----------
-        image_id : int
-            Internal image index of the dataset.
-
-        Returns
-        -------
-        str
-            Path of the image file.
-        """
-        return self.image_info[image_id]["path"]

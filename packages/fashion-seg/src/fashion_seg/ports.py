@@ -121,7 +121,9 @@ class TrainResult:
 
 
 class ServingRequirements(Frozen):
-    """Runtime requirements of a packaged model: only its own framework.
+    """Runtime requirements of a family's packaged models: its framework.
+
+    The serving wrapper's own requirements are added when packaging.
 
     Attributes
     ----------

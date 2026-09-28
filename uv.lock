@@ -801,6 +801,7 @@ dependencies = [
     { name = "fashion-seg-contract" },
     { name = "mlflow" },
     { name = "numpy" },
+    { name = "pandas" },
     { name = "pillow" },
     { name = "polars" },
     { name = "pycocotools" },
@@ -811,9 +812,10 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fashion-seg-contract", url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" },
+    { name = "fashion-seg-contract", url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.2.0/fashion_seg_contract-0.2.0-py3-none-any.whl" },
     { name = "mlflow", specifier = ">=3.16,<3.17" },
     { name = "numpy", specifier = ">=1.23" },
+    { name = "pandas", specifier = ">=2" },
     { name = "pillow", specifier = ">=10" },
     { name = "polars", specifier = ">=1.20" },
     { name = "pycocotools", specifier = ">=2.0.8" },
@@ -824,13 +826,13 @@ requires-dist = [
 
 [[package]]
 name = "fashion-seg-contract"
-version = "0.1.0"
-source = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
+version = "0.2.0"
+source = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.2.0/fashion_seg_contract-0.2.0-py3-none-any.whl" }
 dependencies = [
     { name = "numpy" },
 ]
 wheels = [
-    { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl", hash = "sha256:ff4b470e9bc105639d3d6715b6a03198ed910f94a4d088532ae95aac4461aade" },
+    { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.2.0/fashion_seg_contract-0.2.0-py3-none-any.whl", hash = "sha256:e9eae64a1c7e9d1c73b023adb92690649c93bbb7336518c003bbfa22b8bafe8a" },
 ]
 
 [package.metadata]

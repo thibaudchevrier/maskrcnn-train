@@ -25,8 +25,6 @@ fashion-seg = { path = "../../packages/fashion-seg", editable = true }
 # macOS wheels include the Apple GPU (MPS) backend.
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
-# Released wheels, by URL (same as packages/fashion-seg).
-fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
 
 [build-system]
 requires = ["hatchling"]

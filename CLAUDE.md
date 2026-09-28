@@ -116,7 +116,7 @@ family: a new import across layers fails the tests.
   version is fixed (not the repository's): family lock files record it, so bump it only with its
   interface, then `uv lock` every environment. Every environment has a `make test-*` target, a
   pylint hook and a CI test job.
-- **Shared code**: anything about the model's response goes in `fashion-seg-contract`; Matterport
+- **Shared code**: anything about the model's request or response goes in `fashion-seg-contract`; Matterport
   network code goes in `maskrcnn-matterport`. Don't copy code between repositories.
 - **Compute**: full training needs the whole dataset (`uv run dvc pull data.dvc`, ~24 GB) and a
   GPU; locally, use `make pull-sample` and `make train-<family>-smoke`.
@@ -250,7 +250,7 @@ def decode(rle: str, height: int, width: int = 1) -> np.ndarray:
   `print` in library code, error messages that say what to do.
 - Keep functions small enough for pylint's limits; split them rather than raising the limits.
 - No duplicated code across repositories: shared code goes in a released package
-  (fashion-seg-contract for the model's response, maskrcnn-matterport for Matterport code).
+  (fashion-seg-contract for the model's request and response, maskrcnn-matterport for Matterport code).
 
 ### Tests
 

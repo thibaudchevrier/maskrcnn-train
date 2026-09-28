@@ -1,6 +1,6 @@
 """MLflow pyfunc wrapper: base64 images in, JSON-friendly instances out.
 
-Request (``POST /invocations`` on ``mlflow models serve``)::
+Request (``POST /invocations`` on ``mlflow models serve``), see ``fashion_seg_contract.request``::
 
     {"dataframe_records": [{"image": "<base64 jpeg/png>"}], "params": {"min_score": 0.8}}
 
@@ -23,15 +23,12 @@ from typing import Any
 import mlflow.pyfunc
 import numpy as np
 import pandas as pd  # MLflow's pyfunc interface: predict() receives a pandas DataFrame
-from fashion_seg_contract import rle
+from fashion_seg_contract import request, rle
 from fashion_seg_contract.labels import load_class_names
 from fashion_seg_contract.schema import Instance, Prediction
 from PIL import Image, ImageOps
 
 from fashion_seg.ports import Detections, Predictor
-
-IMAGE_COLUMN = "image"
-DEFAULT_MIN_SCORE = 0.7
 
 
 def decode_image(payload: str | bytes) -> np.ndarray:
@@ -69,7 +66,7 @@ def encode_image(image: np.ndarray, fmt: str = "PNG") -> str:
     """
     buffer = io.BytesIO()
     Image.fromarray(image).save(buffer, format=fmt)
-    return base64.b64encode(buffer.getvalue()).decode("ascii")
+    return request.encode_image(buffer.getvalue())
 
 
 def format_detections(
@@ -180,9 +177,9 @@ class FashionSegmentationModel(mlflow.pyfunc.PythonModel):
         list[Prediction]
             One response per input row (see ``fashion_seg_contract.schema``).
         """
-        min_score = float((params or {}).get("min_score", DEFAULT_MIN_SCORE))
+        min_score = float((params or {}).get(request.MIN_SCORE_PARAM, request.DEFAULT_MIN_SCORE))
         results = []
-        for payload in model_input[IMAGE_COLUMN]:
+        for payload in model_input[request.IMAGE_FIELD]:
             image = decode_image(payload)
             detections = self._predictor.predict(image)
             results.append(format_detections(detections, self._class_names, image.shape, min_score))

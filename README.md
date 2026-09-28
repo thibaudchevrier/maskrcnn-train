@@ -83,7 +83,7 @@ own uv project with its own Python and framework. Each family's entrypoint wires
 import fashion_seg_torchvision
 from fashion_seg.cli import main
 
-main(fashion_seg_torchvision)   # the generic CLI, with this family injected
+main(fashion_seg_torchvision)  # the generic CLI, with this family injected
 ```
 
 ```

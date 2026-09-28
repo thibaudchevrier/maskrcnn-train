@@ -20,6 +20,4 @@ package = false
 [tool.uv.sources]
 fashion-seg = { path = "../../../packages/fashion-seg", editable = true }
 fashion-seg-matterport = { path = "..", editable = true }
-# Released wheels, by URL (same as packages/fashion-seg and families/matterport).
-fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
-maskrcnn-matterport = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl" }
+# Released wheels (fashion-seg-contract, maskrcnn-matterport): declared by the path dependencies.

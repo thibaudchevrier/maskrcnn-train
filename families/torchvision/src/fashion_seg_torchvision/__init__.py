@@ -28,8 +28,7 @@ from fashion_seg.ports import (
 SPEC = FamilySpec(
     name="torchvision",
     serving=ServingRequirements(
-        pinned=("mlflow", "pydantic", "torch", "torchvision", "numpy", "pandas", "pillow"),
-        released=("fashion-seg-contract",),
+        pinned=("torch", "torchvision"),
         # CPU-only PyTorch wheels on Linux, as in families/torchvision/pyproject.toml (the
         # default ones bundle CUDA).
         pip_options=("--extra-index-url https://download.pytorch.org/whl/cpu",),

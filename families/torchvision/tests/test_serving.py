@@ -60,6 +60,7 @@ def test_packaged_torchvision_model_follows_the_contract(export_dir, tmp_path, m
     assert provenance["model_family"] == "torchvision"
     requirements = (tmp_path / "packaged" / "requirements.txt").read_text()
     assert "torchvision==" in requirements and "tensorflow" not in requirements
+    assert "mlflow==" in requirements and "fashion-seg-contract @ https:" in requirements
     bundled = {p.name for p in (tmp_path / "packaged" / "code").iterdir()}
     assert bundled == {"fashion_seg", "fashion_seg_torchvision"}
     served = mlflow.pyfunc.load_model(str(tmp_path / "packaged"))
