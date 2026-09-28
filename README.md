@@ -182,8 +182,22 @@ uv run dvc repro --single-item evaluate_torchvision      # compare with evaluate
 ```
 
 Measured on an M4 Pro: 0.8 s per step (2 images, 1024 px) on the Apple GPU, 4.9 s on the CPU, so
-about 5 hours per epoch (~20,000 steps). Checkpoints are written after each epoch: with
-`resume: true`, re-running the stage continues an interrupted training.
+about 5 hours per epoch (~20,000 steps). For a long run, use the background targets:
+
+```bash
+make train-torchvision   # dvc repro train_torchvision in the background (survives the terminal,
+                         # keeps the Mac awake; closing the lid still sleeps it)
+make train-log           # follow it (losses every 50 steps); MLflow: make mlflow-ui
+make train-stop          # finish the current step, save a checkpoint, stop
+make train-torchvision   # resume exactly where it stopped, even mid-epoch
+```
+
+A checkpoint is saved every `checkpoint_every` steps (500, ~7 minutes) and at each epoch's end,
+so even a crash or a power cut loses at most that. Each epoch's shuffle order is reproducible
+(`seed`), so a resumed run skips the images already trained on. Each session is its own MLflow
+run (`torchvision`), with the step counter continuing: select them together to see the whole
+curve. To start over instead, delete `outputs/torchvision/checkpoints`. Changing `epochs` while
+resuming also changes the learning-rate schedule (cosine over the new total).
 
 **Matterport** (the 2021 model's architecture; TensorFlow 2.15, CPU-only on a Mac):
 

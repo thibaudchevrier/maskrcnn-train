@@ -171,6 +171,8 @@ make prepare                  # dvc repro --single-item prepare
 make pull-sample              # a few images for smoke runs
 make train-matterport-smoke   # tiny training run on the pulled images
 make train-torchvision-smoke  # same for torchvision (Apple GPU if available)
+make train-torchvision        # full torchvision training in the background (resumable)
+make train-log / train-stop   # follow it / save and stop it (resume: make train-torchvision)
 make mlflow-ui                # http://localhost:5002
 make pull-val                 # validation images (VAL_IMAGES=200 for a subset)
 make evaluate-quick MODEL=legacy   # score a packaged model on 200 val images (not DVC-tracked)

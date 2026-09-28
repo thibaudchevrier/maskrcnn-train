@@ -56,6 +56,8 @@ train:
     warmup_steps: 1000
     num_workers: 4
     log_every: 50
+    checkpoint_every: 500     # ~7 min on the Apple GPU: the most a stop can lose
+    seed: 0                   # shuffle order: reproducible, so a stopped run resumes mid-epoch
     device: auto              # CUDA, then Apple GPU (MPS), then CPU
     resume: true              # continue from checkpoints/last.pt if present
 

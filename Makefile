@@ -11,7 +11,8 @@ export MLFLOW_DISABLE_AGENT_HINT = 1
 
 .PHONY: install hooks format lint test test-architecture test-library test-torchvision test-matterport-train \
 	test-matterport-serve check mlflow-ui prepare pull-sample pull-val \
-	train-matterport-smoke train-torchvision-smoke evaluate-quick
+	train-matterport-smoke train-torchvision-smoke evaluate-quick \
+	train-torchvision train-log train-stop
 
 install:
 	uv sync --locked
@@ -73,6 +74,23 @@ train-torchvision-smoke:
 
 train-matterport-smoke:
 	$(MATTERPORT_TRAIN) python -m fashion_seg_matterport train --smoke
+
+# Full torchvision training (DVC stage train_torchvision), in the background: it survives closing
+# the terminal and keeps the Mac awake (caffeinate; closing the lid still sleeps it). Resumable:
+# `make train-stop` finishes the current step, saves and stops; `make train-torchvision` resumes.
+TRAIN_LOG = outputs/torchvision-train.log
+train-torchvision:
+	@mkdir -p outputs
+	nohup caffeinate -i uv run dvc repro --single-item train_torchvision >> $(TRAIN_LOG) 2>&1 &
+	@echo "Training in the background: 'make train-log' to follow it, 'make train-stop' to stop it."
+
+train-log:
+	tail -f $(TRAIN_LOG)
+
+# SIGINT to the Python process only (not its uv and DVC parents): it saves, then exits.
+train-stop:
+	pkill -INT -f "^[^ ]*python[0-9.]* -m fashion_seg_(torchvision|matterport) train" \
+		|| echo "No training running."
 
 # Score a packaged model on the first 200 pulled val images, in its family's environment
 # (not tracked by DVC, no registry tags): make evaluate-quick MODEL=legacy|torchvision
