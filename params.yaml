@@ -19,7 +19,7 @@ tracking:
   registered_name: fashion-maskrcnn     # every packaged model is a version of it
 
 # Training parameters per model family (train_<family> stages), validated by the family's
-# Config (fashion_seg/families/<family>/__init__.py).
+# Config (families/<family>/src/fashion_seg_<family>/__init__.py).
 train:
   # Matterport Mask R-CNN. Defaults follow the 2021 notebook.
   matterport:
@@ -59,8 +59,8 @@ train:
     device: auto              # CUDA, then Apple GPU (MPS), then CPU
     resume: true              # continue from checkpoints/last.pt if present
 
-# Served models: package@<name> wraps an export as an MLflow pyfunc model (the contract),
-# evaluate@<name> scores it.
+# Served models: package_<name> wraps an export as an MLflow pyfunc model (the contract),
+# evaluate_<name> scores it. Each is packaged and evaluated in its family's environment.
 models:
   legacy:                        # the 2021 model
     family: matterport

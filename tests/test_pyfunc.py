@@ -1,9 +1,9 @@
-"""Tests of the MLflow serving wrapper, with a fake predictor and, if pulled, the 2021 model."""
+"""Tests of the MLflow serving wrapper, with a fake predictor (real models: each family's tests)."""
 
 import base64
 import io
-import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -40,7 +40,7 @@ def _request(image: np.ndarray) -> dict[str, list[str]]:
 
 def test_predict_formats_instances_and_filters_by_score():
     """Responses follow the contract, carry labels and decoded masks, and honour min_score."""
-    model = FashionSegmentationModel(FakePredictor(), CLASS_NAMES)
+    model = FashionSegmentationModel(predictor=FakePredictor(), class_names=CLASS_NAMES)
     image = np.zeros((20, 10, 3), np.uint8)
 
     [default] = model.predict(None, _request(image))
@@ -62,19 +62,25 @@ def test_decode_image_handles_grayscale_and_raw_bytes():
     assert decode_image(base64.b64encode(buffer.getvalue()).decode()).shape == (6, 8, 3)
 
 
-SAVED_MODEL = Path(os.environ.get("FASHION_SEG_SAVED_MODEL", "deployement"))
+def test_load_context_uses_the_injected_loader(tmp_path):
+    """load_context builds the predictor with the family's loader, on the model artifact."""
+    labels = tmp_path / "labels.json"
+    labels.write_text('{"categories": [{"id": 0, "name": "shirt"}, {"id": 1, "name": "pants"}]}')
+    loaded = []
+
+    def load_predictor(model_dir: Path) -> FakePredictor:
+        loaded.append(model_dir)
+        return FakePredictor()
+
+    model = FashionSegmentationModel(load_predictor=load_predictor)
+    context = SimpleNamespace(artifacts={"model": str(tmp_path / "export"), "labels": str(labels)})
+    model.load_context(context)
+    [result] = model.predict(None, _request(np.zeros((20, 10, 3), np.uint8)))
+    assert loaded == [tmp_path / "export"]
+    assert [i["label"] for i in result["instances"]] == ["shirt", "pants"]
 
 
-@pytest.mark.skipif(not (SAVED_MODEL / "saved_model.pb").exists(), reason="legacy model not pulled")
-def test_real_saved_model_runs():
-    """The 2021 model (deployement/) runs end to end and follows the contract."""
-    # pylint: disable-next=import-outside-toplevel  # TensorFlow loads only when the model is pulled
-    from fashion_seg.families.matterport.predictor import MatterportPredictor
-
-    model = FashionSegmentationModel(MatterportPredictor(SAVED_MODEL), ["BG"] + ["c"] * 46)
-    image = np.random.default_rng(0).integers(0, 255, (300, 200, 3), dtype=np.uint8)
-    [result] = model.predict(None, _request(image), params={"min_score": 0.0})
-    schema.validate(result)
-    assert (result["height"], result["width"]) == (300, 200)
-    for inst in result["instances"]:
-        assert 1 <= inst["class_id"] <= 46
+def test_load_context_without_loader_fails():
+    """A model packaged without a predictor loader fails loudly instead of predicting nothing."""
+    with pytest.raises(RuntimeError):
+        FashionSegmentationModel().load_context(SimpleNamespace(artifacts={}))

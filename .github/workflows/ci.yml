@@ -42,27 +42,23 @@ jobs:
       - run: make lint
 
   tests:
-    name: Unit and contract tests
+    name: Tests (${{ matrix.env.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env:
+          - { name: "library", project: ".", target: test-core }
+          - { name: "torchvision", project: families/torchvision, target: test-torchvision }
+          - { name: "matterport training", project: families/matterport, target: test-matterport-train }
+          - { name: "matterport serving", project: families/matterport/serve, target: test-matterport-serve }
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - run: uv sync --locked
-      - run: uv run pytest
-
-  trainer-matterport:
-    name: Matterport training env (smoke training)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-      - run: uv sync --locked --project envs/matterport
-      - name: Train a tiny model on synthetic data, export it (Python 3.11, TensorFlow 2.15)
-        run: make test-matterport
+      - run: uv sync --locked --project ${{ matrix.env.project }}
+      - run: make ${{ matrix.env.target }}
 
   secrets-check:
     name: Detect DVC credentials
@@ -97,13 +93,13 @@ jobs:
         run: uv run dvc remote modify --local myremote gdrive_use_service_account true
       - name: Pull pipeline inputs and the published model
         run: |
-          uv run dvc pull deployement.dvc data/imaterialist/label_descriptions.json package@legacy
+          uv run dvc pull deployement.dvc data/imaterialist/label_descriptions.json package_legacy
       - name: Published model is up to date with code, params and data
         run: |
-          status="$(uv run dvc status --json package@legacy)"
+          status="$(uv run dvc status --json package_legacy)"
           echo "$status"
           if [ "$status" != "{}" ]; then
-            echo "::error::dvc.lock is stale: run 'uv run dvc repro --single-item package@legacy', 'uv run dvc push' and commit dvc.lock."
+            echo "::error::dvc.lock is stale: run 'uv run dvc repro --single-item package_legacy', 'uv run dvc push' and commit dvc.lock."
             exit 1
           fi
       - name: Tests against the real model

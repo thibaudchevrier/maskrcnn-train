@@ -1,7 +1,8 @@
 schema: '2.0'
 stages:
   package_legacy:
-    cmd: python -m fashion_seg.package legacy_model
+    cmd: uv run --project families/matterport/serve --locked python -m 
+      fashion_seg_matterport package legacy
     deps:
     - path: data/imaterialist/label_descriptions.json
       hash: md5
@@ -12,38 +13,34 @@ stages:
       md5: d94d8cc1b1efbccb059ae08f6b077148.dir
       size: 265710485
       nfiles: 4
-    - path: src/fashion_seg
+    - path: families/matterport/serve/uv.lock
       hash: md5
-      md5: 500c494a1b98891a8a4cae9a4f1171c1.dir
-      size: 39985
-      nfiles: 10
+      md5: 9bcd2ac4a83a1f4ed2fe018e8314e511
+      size: 235468
+    - path: families/matterport/src
+      hash: md5
+      md5: 22653986cbecd5b8bb6273e1ef8a8fbd.dir
+      size: 15940
+      nfiles: 5
+    - path: packages/fashion-seg/src/fashion_seg
+      hash: md5
+      md5: 49de62ad8a172053b82d2e48a18812c6.dir
+      size: 66151
+      nfiles: 18
     params:
       params.yaml:
-        legacy_model:
+        models.legacy:
           family: matterport
-          model_dir: deployement
-          label_file: data/imaterialist/label_descriptions.json
+          source: deployement
           output_dir: models/fashion-maskrcnn
-          experiment: fashion-maskrcnn
-          registered_name: fashion-maskrcnn
-      pyproject.toml:
-        tool.uv.sources:
-          fashion-seg-core:
-            workspace: true
-          fashion-seg-torchvision:
-            workspace: true
-          torch:
-          - index: pytorch-cpu
-            marker: sys_platform == 'linux'
-          torchvision:
-          - index: pytorch-cpu
-            marker: sys_platform == 'linux'
-          fashion-seg-contract:
-            url: 
-              https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl
-          maskrcnn-matterport:
-            url: 
-              https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl
+        tracking.packaging_experiment: fashion-maskrcnn
+        tracking.registered_name: fashion-maskrcnn
+    outs:
+    - path: models/fashion-maskrcnn
+      hash: md5
+      md5: b283e351492399dac871187262b5edca.dir
+      size: 266147445
+      nfiles: 39
   prepare:
     cmd: python -m fashion_seg prepare
     deps:
@@ -51,12 +48,12 @@ stages:
       hash: md5
       md5: 7eaec314eed2d95c363ecb81f4475bb6
       size: 1437924420
-    - path: src/fashion_seg/data
+    - path: packages/fashion-seg/src/fashion_seg/data
       hash: md5
       md5: e29740bfd07484dd4a8f5f930c6d4f1f.dir
       size: 5740
       nfiles: 3
-    - path: src/fashion_seg/service/preparation.py
+    - path: packages/fashion-seg/src/fashion_seg/service/preparation.py
       hash: md5
       md5: f461e5925c78bb049407a994e455f7b3
       size: 1619

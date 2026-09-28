@@ -32,22 +32,23 @@ imports and serves.
 | **git** | Code, `params.yaml`, `dvc.yaml`, and small pointer files (`*.dvc`, `dvc.lock`) holding the hashes of the large files |
 | **DVC** | Stores large files on Google Drive, runs the pipeline stages, transports the packaged model to fashion-serving |
 | **MLflow** | Experiment tracking (params, per-epoch losses) and model registry, all local; the model package format |
-| **uv** | The root environment (Python 3.12) and, for families needing another Python, their own (`envs/matterport`: Python 3.11 + TF 2.15) |
+| **uv** | One environment per purpose: the root one (DVC, lint, `prepare`) and one per model family with its own Python and framework |
 
 ### Repository layout
 
 | Path | Content | Stored in |
 |------|---------|-----------|
-| `src/fashion_seg/` | The `fashion_seg` package, used by every environment (see [Code architecture](#code-architecture)) | git |
-| `envs/matterport/` | Training environment of the Matterport family: Python 3.11, `maskrcnn-matterport[train]` (TensorFlow 2.15) and `fashion_seg` | git |
+| `packages/fashion-seg/` | `fashion_seg`, the shared library: workflow, ports, data, scoring, serving wrapper, CLI (see [Code architecture](#code-architecture)) | git |
+| `families/torchvision/` | torchvision family: code + uv project (Python 3.12, PyTorch) | git |
+| `families/matterport/` | Matterport family: code + training uv project (Python 3.11, TensorFlow 2.15); `serve/`: its serving uv project (Python 3.12, TensorFlow 2.21) | git |
 | `data/` | iMaterialist images + `train.csv` + `label_descriptions.json` (~23.7 GB, 48k files) | DVC (`data.dvc`) |
 | `prepared/` | `annotations.parquet` (one row per image) + `split.json` (frozen train/val ids) | DVC (`prepare` stage) |
 | `weights/` | COCO starting weights of each family, imported from their releases | DVC (`import-url`) |
 | `outputs/<family>/` | Trained model (`model/`) and `metrics.json` | DVC (`train_<family>` stage) |
 | `deployement/` | 2021 Matterport model (TF SavedModel + `config.json`) | DVC (`deployement.dvc`) |
-| `models/fashion-maskrcnn/` | **Build output**: the packaged 2021 model, the one fashion-serving imports today | DVC (`package@legacy` stage) |
-| `models/fashion-maskrcnn-torchvision/` | **Build output**: the packaged torchvision model | DVC (`package@torchvision` stage) |
-| `metrics/` | Evaluation scores of each packaged model | git (`evaluate@<model>` stage) |
+| `models/fashion-maskrcnn/` | **Build output**: the packaged 2021 model, the one fashion-serving imports today | DVC (`package_legacy` stage) |
+| `models/fashion-maskrcnn-torchvision/` | **Build output**: the packaged torchvision model | DVC (`package_torchvision` stage) |
+| `metrics/` | Evaluation scores of each packaged model | git (`evaluate_<model>` stage) |
 | `mlruns/` | Archive: a Nov 2024 MLflow 1.30 log of the 2021 weights (no params or metrics) | DVC (`mlruns.dvc`) |
 | `mlflow.db`, `mlartifacts/` | Local MLflow tracking store | not versioned |
 
@@ -62,42 +63,47 @@ Code shared with other repositories comes from released packages, not copies:
 | Package | Provides | Used by |
 |---------|----------|---------|
 | [fashion-seg-contract](https://github.com/thibaudchevrier/fashion-seg-contract) | Response JSON Schema, RLE `encode`/`decode`, label mapping | `fashion_seg` (every environment), fashion-serving |
-| [maskrcnn-matterport](https://github.com/thibaudchevrier/maskrcnn-matterport-tf2) | Matterport network and training (`[train]`), TensorFlow-free inference helpers and export runner | Matterport family: training (`[train]`, `envs/matterport`), serving (base) |
+| [maskrcnn-matterport](https://github.com/thibaudchevrier/maskrcnn-matterport-tf2) | Matterport network and training (`[train]`), TensorFlow-free inference helpers and export runner | Matterport family: training (`[train]`, `families/matterport`), serving (base, `families/matterport/serve`) |
 
-They are referenced by the URL of their released wheel in `[tool.uv.sources]` (`pyproject.toml` and
-`envs/matterport/pyproject.toml`), as from a package registry: GitHub Packages has no Python
+They are referenced by the URL of their released wheel in `[tool.uv.sources]` (the library's and
+each family's `pyproject.toml`), as from a package registry: GitHub Packages has no Python
 registry, so each release attaches its wheel. The packaged model pins the same URLs in its
-`requirements.txt`. To upgrade, change the URL in both files, run `uv lock` (and
-`uv lock --project envs/matterport`), then `uv run dvc repro --single-item package@legacy`: DVC
-tracks `tool.uv.sources` as a parameter of that stage, so the model is re-packaged.
+`requirements.txt`. To upgrade, change the URL, run `uv lock` in each environment
+(`uv lock --project families/<name>`), then re-run the `package_<model>` stages: they depend on
+their environment's `uv.lock`, so the models are re-packaged.
 
 ## Code architecture
 
-The code follows **ports and adapters** (hexagonal architecture): the workflow is written once,
-against interfaces; each model family is an adapter implementing them; a registry builds the
-family from its name. `python -m fashion_seg` is the only module wired to all the others.
+The code follows **ports and adapters** (hexagonal architecture). The workflow is written once in
+the shared library, against interfaces. Each model family is an adapter implementing them, in its
+own uv project with its own Python and framework. Each family's entrypoint wires it explicitly:
+
+```python
+# families/torchvision/src/fashion_seg_torchvision/__main__.py
+import fashion_seg_torchvision
+from fashion_seg.cli import main
+
+main(fashion_seg_torchvision)   # the generic CLI, with this family injected
+```
 
 ```
-python -m fashion_seg <prepare | train <family> | package <model> | evaluate <model>>
-        │  reads params.yaml (config.py, pydantic)
-        ├─► registry.get_family("torchvision") ──► families/torchvision/   (adapter: all model logic)
-        └─► service/training.train(family, config, params)                  (the workflow, generic)
-                 selects the split's images, opens the MLflow run, calls family.train(...),
-                 writes metrics.json, logs the export
+uv run --project families/torchvision python -m fashion_seg_torchvision train [--smoke]
+uv run --project families/torchvision python -m fashion_seg_torchvision package torchvision
+uv run --project families/matterport/serve python -m fashion_seg_matterport evaluate legacy
 ```
 
 | Module | Role |
 |--------|------|
-| `ports.py` | The interfaces: `ModelFamily` (what a family provides), `Predictor`, `MetricLogger`, and the types they exchange |
-| `families/<name>/` | One model family: `SPEC` (training environment, serving requirements), `Config` (its `params.yaml` section), `train`, `load_predictor`, `describe`; network, dataset, training loop and predictor in submodules |
-| `service/` | The workflow steps, identical for every family: `preparation`, `training`, `packaging`, `evaluation` |
-| `registry.py`, `runtime.py` | Find a family by name; run the command in the family's Python environment |
-| `config.py`, `data/`, `scoring.py`, `tracking.py`, `serving/` | Parameters, dataset logic, COCO mAP, MLflow setup, the MLflow serving wrapper: independent building blocks |
+| `fashion_seg.ports` | The interfaces: `ModelFamily` (what a family provides), `Predictor`, `MetricLogger`, and the types they exchange |
+| `fashion_seg.service` | The workflow steps, identical for every family: `preparation`, `training`, `packaging`, `evaluation` |
+| `fashion_seg.cli` | `main(family)`: the generic command line (`train`, `package`, `evaluate`) |
+| `fashion_seg.config`, `.data`, `.scoring`, `.tracking`, `.serving` | Parameters (pydantic), dataset logic, COCO mAP, MLflow setup, the MLflow serving wrapper: independent building blocks |
+| `fashion_seg_<family>` | One model family: `SPEC` (serving requirements), `Config` (its `params.yaml` section), `train`, `load_predictor`, `describe`; network, dataset, training loop and predictor in submodules; `__main__` its entrypoint |
 
-`train matterport` started from the root environment runs itself again in `envs/matterport`
-(Python 3.11): one command for every family. The design rules (functions first, dependencies
-through Protocols, dependency injection in the composition root) are in [`CLAUDE.md`](CLAUDE.md)
-and checked by `tests/test_architecture.py`.
+The command (DVC stage or Makefile target) names the environment and the entrypoint: nothing is
+looked up by name or switched at run time. The design rules (functions first, dependencies
+through Protocols, injection in the entrypoint) are in [`CLAUDE.md`](CLAUDE.md) and checked by
+`tests/test_architecture.py`.
 
 ## Pipeline
 
@@ -106,20 +112,20 @@ data/imaterialist/train.csv ─► prepare ─► prepared/ ─┐
 data/imaterialist/train/ ────────────────────────────┼─► train_matterport  ─► outputs/matterport/
 weights/mask_rcnn_coco.h5 ───────────────────────────┤
 weights/maskrcnn_resnet50_fpn_v2_coco.pth ───────────┴─► train_torchvision ─► outputs/torchvision/
-deployement/ (2021 model) ────────────────────────────► package@legacy      ─► models/fashion-maskrcnn/
-outputs/torchvision/model ────────────────────────────► package@torchvision ─► models/fashion-maskrcnn-torchvision/
-models/<packaged> + prepared/ + val images ───────────► evaluate@<model>    ─► metrics/evaluate-<model>.json
+deployement/ (2021 model) ────────────────────────────► package_legacy      ─► models/fashion-maskrcnn/
+outputs/torchvision/model ────────────────────────────► package_torchvision ─► models/fashion-maskrcnn-torchvision/
+models/<packaged> + prepared/ + val images ───────────► evaluate_<model>    ─► metrics/evaluate-<model>.json
 ```
 
-Every stage runs `python -m fashion_seg <command>`.
+Each stage runs in the environment it names: `python -m fashion_seg prepare` (root), or a family's entrypoint `uv run --project families/<...> python -m fashion_seg_<family> <command>`.
 
 | Stage | Environment | What it does |
 |-------|-------------|--------------|
 | `prepare` | root | Groups `train.csv` (333k masks) into one row per image, and writes the frozen split: images sorted by id, `KFold(8, shuffle, seed 42)`, fold 0 = validation (39,920 train / 5,703 val), the procedure of the 2021 notebook |
-| `train_matterport` | `envs/matterport` (switched to automatically) | Starts from COCO weights, trains with the 2021 notebook's settings (`params.yaml:train.matterport`), logs every epoch's losses to the MLflow experiment `fashion-seg-training`, exports the inference model and `metrics.json` |
-| `train_torchvision` | root | Fine-tunes torchvision Mask R-CNN v2 from COCO (`params.yaml:train.torchvision`) on CUDA, the Apple GPU or CPU; logs losses, learning rate and per-epoch validation losses to `fashion-seg-training`; checkpoints every epoch (`resume: true` continues an interrupted run); exports `config.json` + `model.pt` |
-| `package@legacy`, `package@torchvision` | root | One per entry of `params.yaml:models`: wraps a model export as an MLflow pyfunc model that serves the contract, with its own requirements (TensorFlow or PyTorch, never both); registers a new `fashion-maskrcnn` version tagged with its `model_family`; writes `models/<name>/` |
-| `evaluate@legacy`, `evaluate@torchvision` | root | Loads a packaged model as it is served, predicts the validation split, computes COCO mask and box mAP (plus AP50, AP75, recall, per-class AP) with pycocotools; logs to the MLflow experiment `fashion-seg-evaluation`, tags the registered model version (`val_mask_map`...), writes `metrics/evaluate-<model>.json` |
+| `train_matterport` | `families/matterport` | Starts from COCO weights, trains with the 2021 notebook's settings (`params.yaml:train.matterport`), logs every epoch's losses to the MLflow experiment `fashion-seg-training`, exports the inference model and `metrics.json` |
+| `train_torchvision` | `families/torchvision` | Fine-tunes torchvision Mask R-CNN v2 from COCO (`params.yaml:train.torchvision`) on CUDA, the Apple GPU or CPU; logs losses, learning rate and per-epoch validation losses to `fashion-seg-training`; checkpoints every epoch (`resume: true` continues an interrupted run); exports `config.json` + `model.pt` |
+| `package_legacy`, `package_torchvision` | `families/matterport/serve`, `families/torchvision` | One per entry of `params.yaml:models`: wraps a model export as an MLflow pyfunc model that serves the contract, with its own requirements (TensorFlow or PyTorch, never both); registers a new `fashion-maskrcnn` version tagged with its `model_family`; writes `models/<name>/` |
+| `evaluate_legacy`, `evaluate_torchvision` | `families/matterport/serve`, `families/torchvision` | Loads a packaged model as it is served, predicts the validation split, computes COCO mask and box mAP (plus AP50, AP75, recall, per-class AP) with pycocotools; logs to the MLflow experiment `fashion-seg-evaluation`, tags the registered model version (`val_mask_map`...), writes `metrics/evaluate-<model>.json` |
 
 Each stage re-runs only when its inputs (files, code, `params.yaml` section) changed since `dvc.lock`.
 
@@ -132,7 +138,7 @@ Each stage re-runs only when its inputs (files, code, `params.yaml` section) cha
 **1. Install the environments:**
 
 ```bash
-make install     # root env (.venv) + Matterport training env (envs/matterport/.venv)
+make install     # the root env and each family's (families/*/.venv, families/matterport/serve/.venv)
 ```
 
 **2. Give DVC access to Google Drive.** Google blocks DVC's shared OAuth app, so use your own:
@@ -170,8 +176,8 @@ make install     # root env (.venv) + Matterport training env (envs/matterport/.
 ```bash
 make pull-sample && make train-torchvision-smoke        # end-to-end check, ~15 s
 uv run dvc repro --single-item train_torchvision        # needs data.dvc (~24 GB) + weights/
-uv run dvc repro --single-item package@torchvision
-uv run dvc repro --single-item evaluate@torchvision      # compare with evaluate@legacy
+uv run dvc repro --single-item package_torchvision
+uv run dvc repro --single-item evaluate_torchvision      # compare with evaluate_legacy
 ```
 
 Measured on an M4 Pro: 0.8 s per step (2 images, 1024 px) on the Apple GPU, 4.9 s on the CPU, so
@@ -193,7 +199,7 @@ Compare trainings in MLflow (`make mlflow-ui`); compare models with the `evaluat
 ### Package and publish
 
 ```bash
-uv run dvc repro --single-item package@legacy   # or package@torchvision; skipped if unchanged
+uv run dvc repro --single-item package_legacy   # or package_torchvision; skipped if unchanged
 make check                                      # ruff, pylint, all tests
 uv run dvc push                                 # upload new outputs to Google Drive
 git add -A && git commit -m "..." && git push   # open a PR; CI checks lint, tests, dvc.lock freshness
@@ -205,7 +211,7 @@ After the merge, deploy it in fashion-serving with `dvc update` (see its README)
 
 ```bash
 make pull-val                                        # the 5,703 validation images (~3 GB)
-uv run dvc repro --single-item evaluate@legacy       # whole split (~2 h on CPU), tracked by DVC
+uv run dvc repro --single-item evaluate_legacy       # whole split (~2 h on CPU), tracked by DVC
 uv run dvc metrics show                              # mask_map, box_map, ... per model
 
 VAL_IMAGES=200 make pull-val && make evaluate-quick MODEL=legacy   # 200 images, ~5 min
@@ -239,11 +245,12 @@ under `Final_project/model/train_results` (outside DVC).
 
 ### Add a model family
 
-`src/fashion_seg/families/torchvision/` is the reference implementation; the step-by-step
-checklist is in [`CLAUDE.md`](CLAUDE.md#adding-a-model-family). In short: a new
-`families/<name>/` package implementing `ports.ModelFamily` (the registry finds it by its name),
-a `train.<name>` section and a `models.<name>` entry in `params.yaml`, a `train_<name>` stage, and
-its own `envs/<name>/` only if it needs another Python. The workflow (`service/`) doesn't change.
+`families/torchvision/` is the reference implementation; the step-by-step checklist is in
+[`CLAUDE.md`](CLAUDE.md#adding-a-model-family). In short: a uv project `families/<name>/` with its
+Python and framework, a package `fashion_seg_<name>` implementing `ports.ModelFamily` and an
+entrypoint calling `main(fashion_seg_<name>)`, a `train.<name>` section and a `models.<name>`
+entry in `params.yaml`, and its `train_`, `package_` and `evaluate_` stages. The library doesn't
+change.
 
 ## Model contract
 
@@ -284,10 +291,10 @@ Response, one entry per image, specified by the JSON Schema in
 ## Development
 
 ```bash
-make install   # both environments
+make install   # every environment
 make hooks     # once: pre-commit and commit-msg git hooks
 make format    # ruff format + autofix
-make check     # lint (all pre-commit hooks, exactly what CI runs) + tests of both environments
+make check     # lint (all pre-commit hooks, exactly what CI runs) + tests of every environment
 ```
 
 Code quality is defined once, in `.pre-commit-config.yaml`: ruff (format, lint, numpy docstrings)
@@ -317,9 +324,8 @@ The version tracks the code; model versions are tracked separately by the MLflow
 | Job | What it checks |
 |-----|----------------|
 | **Lint** | All pre-commit hooks (`make lint`): ruff, pydoclint, pylint per environment, hygiene |
-| **Unit and contract tests** | Data, scoring, serving wrapper, both families, architecture rules; responses validated with `fashion_seg_contract.schema` |
-| **Matterport training env** | Trains a tiny model on synthetic data through `python -m fashion_seg` and exports it (TF 2.15, Python 3.11) |
-| **ML checks** | Pulls the 2021 model and the published package from Drive, fails if `dvc.lock` is stale for `package@legacy`, runs the tests against the real model |
+| **Tests** (one job per environment) | Library (data, scoring, serving wrapper, CLI, architecture rules), torchvision (training smoke run, predictor, packaging), Matterport training (smoke run, TF 2.15, Python 3.11) and serving; responses validated with `fashion_seg_contract.schema` |
+| **ML checks** | Pulls the 2021 model and the published package from Drive, fails if `dvc.lock` is stale for `package_legacy`, runs the tests against the real model |
 
 The **ML checks** need Drive access and are skipped until the `GDRIVE_CREDENTIALS_DATA` secret
 exists. Use a service account (a personal OAuth token expires after 7 days while the app is in

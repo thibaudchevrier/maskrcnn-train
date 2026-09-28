@@ -2,8 +2,7 @@
 # `pre-commit run --all-files`, so local hooks and CI check exactly the same things.
 # Install once: make hooks
 # ruff and pydoclint run from the root environment for all code; pylint runs in the environment
-# of the code it checks (it needs the imports): the root one, or envs/matterport for the code that
-# only runs there (MATTERPORT_CODE in the Makefile).
+# of the code it checks: the root one (library, tests) or the family's (families/<name>).
 # `uv run --no-sync`: during a partial commit pre-commit hides unstaged changes (e.g. a uv.lock
 # matching staged pyproject.toml edits); syncing would then try to rewrite the lockfile.
 repos:
@@ -37,13 +36,13 @@ repos:
         language: system
         types: [python]
         exclude: /tests/|^tests/
+      # pylint runs in the environment of the code it checks (it needs the imports).
       - id: pylint
         name: pylint (root env)
         entry: uv run --no-sync pylint
         language: system
         types: [python]
-        files: ^(src/|conftest\.py$)
-        exclude: ^src/fashion_seg/families/matterport/(dataset|training)\.py$
+        files: ^packages/fashion-seg/src/
       # Tests: pytest fixtures shadow names (redefined-outer-name); pylint infers the length of lists
       # from their empty literal, so `[result] = model.predict(...)` is a false positive.
       - id: pylint-tests
@@ -52,24 +51,33 @@ repos:
         language: system
         types: [python]
         files: ^tests/
-        exclude: ^tests/matterport/
-      - id: pylint-matterport
-        name: pylint (envs/matterport)
+      - id: pylint-torchvision
+        name: pylint (families/torchvision)
         entry: >-
-          uv run --no-sync --project envs/matterport pylint
-          --rcfile envs/matterport/pyproject.toml
-        language: system
-        types: [python]
-        files: ^src/fashion_seg/families/matterport/(dataset|training)\.py$
-      - id: pylint-matterport-tests
-        name: pylint (envs/matterport tests)
-        entry: >-
-          uv run --no-sync --project envs/matterport pylint
-          --rcfile envs/matterport/pyproject.toml
+          uv run --no-sync --project families/torchvision pylint
+          --rcfile families/torchvision/pyproject.toml
           --disable=redefined-outer-name,unbalanced-tuple-unpacking
         language: system
         types: [python]
-        files: ^tests/matterport/
+        files: ^families/torchvision/
+      - id: pylint-matterport
+        name: pylint (families/matterport)
+        entry: >-
+          uv run --no-sync --project families/matterport pylint
+          --rcfile families/matterport/pyproject.toml
+          --disable=redefined-outer-name,unbalanced-tuple-unpacking
+        language: system
+        types: [python]
+        files: ^families/matterport/(src|tests/train)/
+      - id: pylint-matterport-serve
+        name: pylint (families/matterport/serve)
+        entry: >-
+          uv run --no-sync --project families/matterport/serve pylint
+          --rcfile families/matterport/pyproject.toml
+          --disable=redefined-outer-name,unbalanced-tuple-unpacking
+        language: system
+        types: [python]
+        files: ^families/matterport/tests/serve/
       - id: commitizen
         name: conventional commit message
         entry: uv run --no-sync cz check --allow-abort --commit-msg-file

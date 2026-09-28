@@ -1,34 +1,15 @@
+# The repository: its version (commitizen), the root environment (DVC, lint, tests, prepare) and
+# the lint configuration of all code. The code lives in packages/fashion-seg (the shared library)
+# and families/<name> (one uv project per model family, with its own Python and framework).
 [project]
-name = "fashion-seg"
+name = "fashion-seg-train"
 version = "0.3.0"
 description = "Fashion instance segmentation on iMaterialist: data pipeline, training of several models, MLflow packaging"
 readme = "README.md"
-# One package for every environment: the root one (Python 3.12) and the training environments
-# of families needing another Python (envs/matterport: 3.11). Keep these dependencies light and
-# framework-free; frameworks live in the orchestration group (root) or in envs/<name>.
-requires-python = ">=3.11,<3.13"
-dependencies = [
-    "fashion-seg-contract",
-    "mlflow>=3.16,<3.17",   # same minor version everywhere: every environment writes mlflow.db
-    "numpy>=1.23",
-    "pillow>=10",
-    "polars>=1.20",
-    "pycocotools>=2.0.8",
-    "pydantic>=2.7",
-    "pyyaml>=6.0",
-    "scikit-learn>=1.5",
-]
+requires-python = ">=3.12,<3.13"
+dependencies = ["fashion-seg"]
 
 [dependency-groups]
-# Root environment: serves every family (TensorFlow 2.18+ for Matterport exports) and trains the
-# families running on its Python (torchvision).
-orchestration = [
-    "maskrcnn-matterport",
-    "numpy>=2.5.3",
-    "tensorflow>=2.18",
-    "torch>=2.8",
-    "torchvision>=0.23",
-]
 dev = [
     "commitizen>=4.19",
     "dvc[gdrive]>=3.59",
@@ -42,45 +23,27 @@ dev = [
 ]
 
 [tool.uv]
-default-groups = ["orchestration", "dev"]
-# The root environment is Python 3.12 only (.python-version); 3.11 is for envs/matterport.
-environments = ["python_version >= '3.12'"]
+package = false
 
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
+[tool.uv.workspace]
+members = ["packages/fashion-seg"]
 
 [tool.uv.sources]
-# Linux (CI, Docker, cloud CPU): CPU-only PyTorch wheels, without ~2 GB of CUDA libraries.
-# macOS wheels include the Apple GPU (MPS) backend.
-torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
-torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
-# Released wheels, referenced by URL like packages from a registry (GitHub Releases).
-# Same URLs in envs/matterport/pyproject.toml.
-fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
-maskrcnn-matterport = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl" }
+fashion-seg = { workspace = true }
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/fashion_seg"]
-
-# Lint config for all Python code. pylint's is per environment: here for the root environment,
-# in envs/<name>/pyproject.toml for the code running only in a family's training environment.
+# Lint config for all Python code. pylint's is per environment: here for the root environment
+# (packages/fashion-seg, tests), in families/<name>/pyproject.toml for each family.
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["models", "outputs", "mlartifacts"]
+extend-exclude = ["models", "outputs", "mlartifacts", "mlruns"]
 
 [tool.ruff.lint]
 # pycodestyle, pyflakes, isort, pyupgrade, bugbear, comprehensions, simplify, docstrings
 select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "D"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["fashion_seg"]
+known-first-party = ["fashion_seg", "fashion_seg_matterport", "fashion_seg_torchvision"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
@@ -95,9 +58,9 @@ arg-type-hints-in-docstring = true
 check-return-types = true
 
 [tool.pytest.ini_options]
-# Docstring examples are tests too. conftest.py leaves out the code of other environments
-# (envs/matterport runs its own: make test-matterport).
-testpaths = ["src", "tests"]
+# Docstring examples are tests too. Each family runs its own tests in its environment
+# (make test-<family>).
+testpaths = ["packages/fashion-seg/src", "tests"]
 addopts = "--doctest-modules"
 
 [tool.pylint.main]

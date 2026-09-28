@@ -1,16 +1,23 @@
+# One uv environment per purpose; each family runs through its own entrypoint:
+#   uv run --project <env> python -m fashion_seg_<family> train | package <model> | evaluate <model>
 # `lint` runs the pre-commit hooks on every file: the same checks as the git hooks and CI.
-MATTERPORT = uv run --project envs/matterport
-# Code that only runs in envs/matterport (Python 3.11, TensorFlow 2.15), and its tests.
-MATTERPORT_CODE = src/fashion_seg/families/matterport/dataset.py src/fashion_seg/families/matterport/training.py tests/matterport
+TORCHVISION = uv run --project families/torchvision
+MATTERPORT_TRAIN = TF_CPP_MIN_LOG_LEVEL=3 uv run --project families/matterport
+MATTERPORT_SERVE = TF_CPP_MIN_LOG_LEVEL=3 uv run --project families/matterport/serve
 # 5000 is taken by AirPlay on macOS, 5001 by fashion-serving's inference service.
 MLFLOW_PORT ?= 5002
 SAMPLE_IMAGES ?= 12
+export MLFLOW_DISABLE_AGENT_HINT = 1
 
-.PHONY: install hooks format lint test test-matterport check mlflow-ui prepare pull-sample pull-val train-matterport-smoke train-torchvision-smoke evaluate-quick
+.PHONY: install hooks format lint test test-core test-torchvision test-matterport-train \
+	test-matterport-serve check mlflow-ui prepare pull-sample pull-val \
+	train-matterport-smoke train-torchvision-smoke evaluate-quick
 
 install:
 	uv sync --locked
-	uv sync --locked --project envs/matterport
+	uv sync --locked --project families/torchvision
+	uv sync --locked --project families/matterport
+	uv sync --locked --project families/matterport/serve
 
 hooks:
 	uv run pre-commit install --hook-type pre-commit --hook-type commit-msg
@@ -22,11 +29,20 @@ format:
 lint:
 	uv run pre-commit run --all-files --show-diff-on-failure
 
-test: test-matterport
+# Each environment runs its own tests (docstring examples included).
+test: test-core test-torchvision test-matterport-train test-matterport-serve
+
+test-core:
 	uv run pytest
 
-test-matterport:
-	TF_CPP_MIN_LOG_LEVEL=3 $(MATTERPORT) pytest -p no:warnings $(MATTERPORT_CODE)
+test-torchvision:
+	cd families/torchvision && uv run pytest -p no:warnings
+
+test-matterport-train:
+	cd families/matterport && TF_CPP_MIN_LOG_LEVEL=3 uv run pytest -p no:warnings
+
+test-matterport-serve:
+	cd families/matterport && TF_CPP_MIN_LOG_LEVEL=3 uv run --project serve pytest -p no:warnings tests/serve
 
 check: lint test
 
@@ -47,18 +63,17 @@ VAL_IMAGES ?=
 pull-val:
 	uv run python -c "from fashion_seg.data.annotations import load_split as s; ids = s('prepared/split.json')['val']; n = '$(VAL_IMAGES)'; ids = ids[:int(n)] if n else ids; print('\n'.join(f'data/imaterialist/train/{i}.jpg' for i in ids))" | xargs -n 500 uv run dvc pull
 
-# Score a packaged model (MODEL=legacy|torchvision, a key of params.yaml:models) on the first 200 pulled val images
-# (not tracked by DVC, no registry tags).
-MODEL ?= legacy
-evaluate-quick:
-	TF_CPP_MIN_LOG_LEVEL=3 MLFLOW_DISABLE_AGENT_HINT=1 uv run python -m fashion_seg evaluate $(MODEL) --max-images 200 --output metrics/evaluate-$(MODEL)-quick.json
-
-# Tiny torchvision run on the pulled images (Apple GPU if available): checks data, training,
-# checkpointing, MLflow logging and export.
+# Tiny runs on the pulled images: check data, training, checkpointing, MLflow logging and export.
 train-torchvision-smoke:
-	MLFLOW_DISABLE_AGENT_HINT=1 uv run python -m fashion_seg train torchvision --smoke
+	$(TORCHVISION) python -m fashion_seg_torchvision train --smoke
 
-# Tiny Matterport run on the pulled images: checks data, training, MLflow logging and export.
-# Runs in envs/matterport (the command switches environment on its own).
 train-matterport-smoke:
-	TF_CPP_MIN_LOG_LEVEL=3 uv run python -m fashion_seg train matterport --smoke
+	$(MATTERPORT_TRAIN) python -m fashion_seg_matterport train --smoke
+
+# Score a packaged model on the first 200 pulled val images, in its family's environment
+# (not tracked by DVC, no registry tags): make evaluate-quick MODEL=legacy|torchvision
+MODEL ?= legacy
+EVALUATE_legacy = $(MATTERPORT_SERVE) python -m fashion_seg_matterport
+EVALUATE_torchvision = $(TORCHVISION) python -m fashion_seg_torchvision
+evaluate-quick:
+	$(EVALUATE_$(MODEL)) evaluate $(MODEL) --max-images 200 --output metrics/evaluate-$(MODEL)-quick.json

@@ -1,0 +1,25 @@
+# Serving environment of the Matterport family: packaging and evaluation, Python 3.12 +
+# TensorFlow 2.18+ (what fashion-serving runs the exports with).
+# `uv run --project families/matterport/serve python -m fashion_seg_matterport package|evaluate <model>`
+[project]
+name = "fashion-seg-matterport-serve"
+version = "0.1.0"
+description = "Serving environment of the Matterport family"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fashion-seg-matterport",
+    "tensorflow>=2.18",
+]
+
+[dependency-groups]
+dev = ["jsonschema>=4.26.0", "pylint>=4.0.9", "pytest>=9.1.1"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+fashion-seg = { path = "../../../packages/fashion-seg", editable = true }
+fashion-seg-matterport = { path = "..", editable = true }
+# Released wheels, by URL (same as packages/fashion-seg and families/matterport).
+fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
+maskrcnn-matterport = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl" }
