@@ -1,0 +1,37 @@
+# The shared library: ports, configuration, data, workflow (service), scoring, serving wrapper and
+# the generic command line. Framework-free: every family environment installs it (Python 3.11
+# and 3.12). Its version is not the repository's (commitizen bumps that one): family lock files
+# record it, so it only changes with the library's interface.
+[project]
+name = "fashion-seg"
+version = "0.1.0"
+description = "Generic workflow of fashion-seg-train: train, package and evaluate any model family"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "fashion-seg-contract",
+    "mlflow>=3.16,<3.17",   # same minor version everywhere: every environment writes mlflow.db
+    "numpy>=1.23",
+    "pillow>=10",
+    "polars>=1.20",
+    "pycocotools>=2.0.8",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "scikit-learn>=1.5",
+]
+
+[tool.uv.sources]
+# Released wheels, referenced by URL like packages from a registry (GitHub Releases).
+fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fashion_seg"]
+
+# Run from this directory in the root environment: make test-library.
+[tool.pytest.ini_options]
+# Docstring examples are tests too.
+testpaths = ["src", "tests"]
+addopts = "--doctest-modules"

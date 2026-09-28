@@ -1,10 +1,18 @@
+# Each stage runs in the uv environment it needs, through an explicit entrypoint:
+#   python -m fashion_seg prepare                                  root environment
+#   uv run --project families/<family> python -m fashion_seg_<family> train | package | evaluate
+# Code dependencies: the workflow step (packages/fashion-seg/.../service), the modules it uses,
+# and the family's code and lock file (its framework versions).
+vars:
+  - lib: packages/fashion-seg/src/fashion_seg
+
 stages:
   prepare:
-    cmd: python -m fashion_seg.prepare
+    cmd: python -m fashion_seg prepare
     deps:
       - ${data.train_csv}
-      - src/fashion_seg/prepare.py
-      - packages/core/src/fashion_seg_core/annotations.py
+      - ${lib}/service/preparation.py
+      - ${lib}/data
     params:
       - data.train_csv
       - data.prepared_dir
@@ -12,87 +20,123 @@ stages:
     outs:
       - ${data.prepared_dir}
 
+  # Python 3.11, TensorFlow 2.15.
   train_matterport:
-    cmd: uv run --project trainers/matterport --locked python -m fashion_seg_matterport.train
+    cmd: uv run --project families/matterport --locked python -m fashion_seg_matterport train
     deps:
       - ${data.prepared_dir}
       - ${data.train_images}
       - ${data.label_file}
-      - ${train_matterport.init_weights}
-      - trainers/matterport/src
-      - trainers/matterport/uv.lock
-      - packages/core/src/fashion_seg_core
+      - ${train.matterport.init_weights}
+      - families/matterport/src
+      - families/matterport/uv.lock
+      - ${lib}/service/training.py
+      - ${lib}/data
     params:
       - data
       - split
-      - train_matterport
+      - train.matterport
     outs:
-      - ${train_matterport.output_dir}/model
+      - ${train.matterport.output_dir}/model
     metrics:
-      - ${train_matterport.output_dir}/metrics.json:
+      - ${train.matterport.output_dir}/metrics.json:
           cache: false
 
-  package_legacy:
-    cmd: python -m fashion_seg.package legacy_model
-    deps:
-      - ${legacy_model.model_dir}
-      - ${legacy_model.label_file}
-      - src/fashion_seg
-    params:
-      - legacy_model
-      # Pinned wheels of fashion-seg-contract / maskrcnn-matterport: the model's requirements.
-      - pyproject.toml:
-          - tool.uv.sources
-
+  # Python 3.12, PyTorch (CUDA, Apple GPU or CPU).
   train_torchvision:
-    cmd: python -m fashion_seg_torchvision.train
+    cmd: uv run --project families/torchvision --locked python -m fashion_seg_torchvision train
     deps:
       - ${data.prepared_dir}
       - ${data.train_images}
       - ${data.label_file}
-      - ${train_torchvision.init_weights}
-      - trainers/torchvision/src
-      - packages/core/src/fashion_seg_core
+      - ${train.torchvision.init_weights}
+      - families/torchvision/src
+      - families/torchvision/uv.lock
+      - ${lib}/service/training.py
+      - ${lib}/data
     params:
       - data
       - split
-      - train_torchvision
+      - train.torchvision
     outs:
-      - ${train_torchvision.output_dir}/model
+      - ${train.torchvision.output_dir}/model
     metrics:
-      - ${train_torchvision.output_dir}/metrics.json:
+      - ${train.torchvision.output_dir}/metrics.json:
           cache: false
+
+  # A packaged model bundles the library and the family's code, and pins the serving
+  # environment's versions (its lock file): any of them changing re-packages it.
+  package_legacy:
+    cmd: >-
+      uv run --project families/matterport/serve --locked
+      python -m fashion_seg_matterport package legacy
+    deps:
+      - ${models.legacy.source}
+      - ${data.label_file}
+      - ${lib}
+      - families/matterport/src
+      - families/matterport/serve/uv.lock
+    params:
+      - models.legacy
+      - tracking.packaging_experiment
+      - tracking.registered_name
+    outs:
+      - ${models.legacy.output_dir}
 
   package_torchvision:
-    cmd: python -m fashion_seg.package torchvision_model
+    cmd: >-
+      uv run --project families/torchvision --locked
+      python -m fashion_seg_torchvision package torchvision
     deps:
-      - ${torchvision_model.model_dir}
-      - ${torchvision_model.label_file}
-      - src/fashion_seg
-      - trainers/torchvision/src/fashion_seg_torchvision/model.py
+      - ${models.torchvision.source}
+      - ${data.label_file}
+      - ${lib}
+      - families/torchvision/src
+      - families/torchvision/uv.lock
     params:
-      - torchvision_model
-      - pyproject.toml:
-          - tool.uv.sources
+      - models.torchvision
+      - tracking.packaging_experiment
+      - tracking.registered_name
     outs:
-      - ${torchvision_model.output_dir}
+      - ${models.torchvision.output_dir}
 
-  evaluate:
-    foreach: ${evaluate.models}
-    do:
-      cmd: python -m fashion_seg.evaluate --model ${key}
-      deps:
-        - ${item}
-        # prepared/ follows the dataset version. The images are read from data/ but pulled
-        # separately (make pull-val), so they are not a dependency: a partial pull would record
-        # the hash of whatever subset is on disk.
-        - ${data.prepared_dir}
-        - src/fashion_seg/evaluate.py
-      params:
-        - data.prepared_dir
-        - data.train_images
-        - data.label_file
-        - evaluate
-      metrics:
-        - ${evaluate.output_dir}/evaluate-${key}.json:
-            cache: false
+  # prepared/ follows the dataset version. The images are read from data/ but pulled separately
+  # (make pull-val), so they are not a dependency: a partial pull would record the hash of
+  # whatever subset is on disk.
+  evaluate_legacy:
+    cmd: >-
+      uv run --project families/matterport/serve --locked
+      python -m fashion_seg_matterport evaluate legacy
+    deps:
+      - ${models.legacy.output_dir}
+      - ${data.prepared_dir}
+      - ${lib}/service/evaluation.py
+      - ${lib}/scoring.py
+    params:
+      - data.prepared_dir
+      - data.train_images
+      - data.label_file
+      - tracking.evaluation_experiment
+      - evaluate
+    metrics:
+      - ${evaluate.output_dir}/evaluate-legacy.json:
+          cache: false
+
+  evaluate_torchvision:
+    cmd: >-
+      uv run --project families/torchvision --locked
+      python -m fashion_seg_torchvision evaluate torchvision
+    deps:
+      - ${models.torchvision.output_dir}
+      - ${data.prepared_dir}
+      - ${lib}/service/evaluation.py
+      - ${lib}/scoring.py
+    params:
+      - data.prepared_dir
+      - data.train_images
+      - data.label_file
+      - tracking.evaluation_experiment
+      - evaluate
+    metrics:
+      - ${evaluate.output_dir}/evaluate-torchvision.json:
+          cache: false

@@ -1,80 +1,13 @@
+# The repository: its version (commitizen), the root environment (DVC, lint, tests, prepare) and
+# the lint configuration of all code. The code lives in packages/fashion-seg (the shared library)
+# and families/<name> (one uv project per model family, with its own Python and framework).
 [project]
-name = "fashion-seg"
+name = "fashion-seg-train"
 version = "0.3.0"
 description = "Fashion instance segmentation on iMaterialist: data pipeline, training of several models, MLflow packaging"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-dependencies = [
-    "fashion-seg-contract",
-    "fashion-seg-core",
-    "fashion-seg-torchvision",
-    "maskrcnn-matterport",
-    "mlflow>=3.16,<3.17",
-    "numpy>=2.5.3",
-    "polars>=1.20",
-    "pillow>=12.3.0",
-    "pyyaml>=6.0.3",
-    "scikit-learn>=1.5",
-    "tensorflow>=2.18",
-    "pycocotools>=2.0.8",
-]
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
-[tool.uv.workspace]
-members = ["packages/core", "trainers/torchvision"]
-
-[tool.uv.sources]
-fashion-seg-core = { workspace = true }
-fashion-seg-torchvision = { workspace = true }
-# Linux (CI, Docker, cloud CPU): CPU-only PyTorch wheels, without ~2 GB of CUDA libraries.
-# macOS wheels include the Apple GPU (MPS) backend.
-torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
-torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
-# Released wheels, referenced by URL like packages from a registry (GitHub Releases).
-fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
-maskrcnn-matterport = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl" }
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/fashion_seg"]
-
-# Lint config for all Python code (src/, tests/, packages/, trainers/). pylint's is per
-# environment: here for the orchestration env, in trainers/<name>/pyproject.toml for trainers.
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-extend-exclude = ["models", "outputs", "mlartifacts"]
-
-[tool.ruff.lint]
-# pycodestyle, pyflakes, isort, pyupgrade, bugbear, comprehensions, simplify, docstrings
-select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "D"]
-
-[tool.ruff.lint.isort]
-known-first-party = ["fashion_seg", "fashion_seg_core", "fashion_seg_matterport", "fashion_seg_torchvision"]
-
-[tool.ruff.lint.pydocstyle]
-convention = "numpy"
-
-# Every parameter, return value and raised exception is documented (numpy style), with types
-# matching the signature's annotations. Tests only need short docstrings (ruff D).
-[tool.pydoclint]
-style = "numpy"
-exclude = '\.venv|tests|models|outputs'
-skip-checking-short-docstrings = false
-arg-type-hints-in-docstring = true
-check-return-types = true
-
-[tool.pytest.ini_options]
-# Docstring examples are tests too.
-testpaths = ["src", "packages/core/src", "tests", "trainers/torchvision/src", "trainers/torchvision/tests"]
-addopts = "--doctest-modules"
+dependencies = ["fashion-seg"]
 
 [dependency-groups]
 dev = [
@@ -89,6 +22,46 @@ dev = [
     "ruff>=0.16.9",
 ]
 
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/fashion-seg"]
+
+[tool.uv.sources]
+fashion-seg = { workspace = true }
+
+# Lint config for all Python code. pylint's is per environment: here for the root environment
+# (packages/fashion-seg, tests), in families/<name>/pyproject.toml for each family.
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["models", "outputs", "mlartifacts", "mlruns"]
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, isort, pyupgrade, bugbear, comprehensions, simplify, docstrings
+select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "D"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["fashion_seg", "fashion_seg_matterport", "fashion_seg_torchvision"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+# Every parameter, return value and raised exception is documented (numpy style), with types
+# matching the signature's annotations. Tests only need short docstrings (ruff D).
+[tool.pydoclint]
+style = "numpy"
+exclude = '\.venv|tests|models|outputs'
+skip-checking-short-docstrings = false
+arg-type-hints-in-docstring = true
+check-return-types = true
+
+[tool.pytest.ini_options]
+# Repository-wide tests (architecture rules across the library and the families). The library
+# and each family run their own tests (make test-library, make test-<family>).
+testpaths = ["tests"]
+
 [tool.pylint.main]
 py-version = "3.12"
 extension-pkg-allow-list = ["numpy"]
@@ -96,11 +69,6 @@ extension-pkg-allow-list = ["numpy"]
 [tool.pylint."messages control"]
 # Import order is ruff's job (isort rules), which knows the first-party packages.
 disable = ["too-few-public-methods", "wrong-import-order", "ungrouped-imports"]
-
-[tool.pylint.design]
-# The numpy code ported from Matterport keeps its original, step-by-step structure.
-max-locals = 25
-max-attributes = 12
 
 [tool.pylint.format]
 max-line-length = 100

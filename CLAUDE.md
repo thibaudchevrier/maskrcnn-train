@@ -5,20 +5,88 @@ Guidance for working in this repository. Read it before changing anything.
 ## What this repo is
 
 `fashion-seg-train`: where every fashion segmentation model is **trained, compared and packaged**.
-It owns the data (DVC on Google Drive), the frozen train/val split, one trainer per model family,
-experiment tracking (MLflow) and the packaging of the served model into `models/fashion-maskrcnn`,
+It owns the data (DVC on Google Drive), the frozen train/val split, one uv project per model
+family, experiment tracking (MLflow) and the packaging of the served models into `models/<name>`,
 which [fashion-serving](https://github.com/thibaudchevrier/fashion-serving) imports.
 
-| Path | Content | Environment |
-|------|---------|-------------|
-| `packages/core/` | `fashion-seg-core`: prepared annotations, MLflow setup (training-side code shared by every trainer) | all |
-| `src/fashion_seg/` | `prepare` stage, packaging, MLflow serving wrapper (`serving/`), predictor adapters (`predictors/`) | orchestration (Python 3.12, TF 2.21) |
-| `trainers/matterport/` | Matterport trainer, own uv project | Python 3.11, `maskrcnn-matterport[train]` (TF 2.15) |
-| `trainers/torchvision/` | torchvision Mask R-CNN v2 trainer (`fashion-seg-torchvision`), workspace member | orchestration (PyTorch; CPU wheels on Linux) |
-| `dvc.yaml`, `params.yaml`, `dvc.lock` | Pipeline stages, their parameters, the hashes of their inputs/outputs | |
+| Path | Content | Environment (uv project) |
+|------|---------|------|
+| `packages/fashion-seg/` | `fashion_seg`: the shared library, framework-free (ports, config, data, workflow, scoring, serving wrapper, generic CLI), and its tests | installed in every environment |
+| `families/torchvision/` | `fashion_seg_torchvision`: all the torchvision logic + its entrypoint | Python 3.12, PyTorch: trains, packages, evaluates |
+| `families/matterport/` | `fashion_seg_matterport`: all the Matterport logic + its entrypoint | Python 3.11, TensorFlow 2.15: trains |
+| `families/matterport/serve/` | Serving environment of the same package | Python 3.12, TensorFlow 2.18+: packages, evaluates |
+| `pyproject.toml` (root) | The repository: version (commitizen), DVC, lint, architecture tests (`tests/`), `prepare` | Python 3.12, no framework |
+| `dvc.yaml`, `params.yaml`, `dvc.lock` | Pipeline stages (each names its environment), parameters, hashes | |
 
-Released packages used here: `fashion-seg-contract` (response schema, RLE, labels) and
-`maskrcnn-matterport` (Matterport network, training, TensorFlow-free inference), by wheel URL.
+## Architecture: ports and adapters, one entrypoint per family
+
+The pattern is **ports and adapters** (hexagonal architecture): the workflow is written once
+against interfaces (the ports, `fashion_seg.ports`), each model family is an adapter
+implementing them, and each family's **entrypoint is its composition root**: it imports the
+family and injects it into the generic command line. No lookup by name, no dynamic dispatch: the
+code that runs is the code the entrypoint imports, in the environment the command names.
+
+```
+uv run --project families/torchvision python -m fashion_seg_torchvision train
+                                                     │
+ families/torchvision/src/fashion_seg_torchvision/__main__.py     (composition root)
+     import fashion_seg_torchvision            ── the adapter: SPEC, Config, train,
+     from fashion_seg.cli import main              load_predictor, describe
+     main(fashion_seg_torchvision)             ── injection
+                                                     │
+ packages/fashion-seg: cli.main(family) ─► service/training.train(family, config, params)
+                                           service/packaging, service/evaluation
+                                           (the workflow, written once, knows only the ports)
+```
+
+| Module (`packages/fashion-seg/src/fashion_seg/`) | Role | May import (from `fashion_seg`) |
+|--------|------|------|
+| `config.py` | pydantic models of `params.yaml`; `TrainConfig`, the base of every family's config | nothing |
+| `data/` | Annotations (`annotations.py`) and the frozen split (`split.py`): pure dataset logic | nothing |
+| `scoring.py` | COCO mask and box mAP of contract predictions (pycocotools) | nothing |
+| `tracking.py` | MLflow tracking store and experiments | nothing |
+| `testing.py` | Synthetic dataset and `params.yaml` for the families' end-to-end tests | nothing |
+| `ports.py` | The interfaces: `ModelFamily`, `Predictor`, `MetricLogger` (Protocols), `Detections`, `TrainInputs`, `TrainResult`, `FamilySpec` | `config` |
+| `serving/pyfunc.py` | MLflow pyfunc wrapper serving any family through the contract; the family's `load_predictor` is injected (and pickled with the model) | `ports` |
+| `service/` | **The workflow, generic over families**: `preparation`, `training` (selection, MLflow run, metrics), `packaging` (MLflow model, registry), `evaluation` | `config`, `data`, `ports`, `scoring`, `serving`, `tracking` |
+| `cli.py` | `main(family, argv)`: `train`, `package <model>`, `evaluate <model>` with the injected family | `config`, `ports`, `service` |
+| `__main__.py` | `python -m fashion_seg prepare`: the only step without a family | `config`, `service` |
+
+A family package (`families/<name>/src/fashion_seg_<name>/`) holds **all of its model logic**:
+`__init__.py` implements `ModelFamily` (`SPEC`, `Config`, `train`, `load_predictor`, `describe`),
+submodules hold the network, dataset, training loop and predictor, and `__main__.py` is its
+entrypoint. It may import `fashion_seg.config` and `fashion_seg.ports` only (its entrypoint,
+`fashion_seg.cli`), never MLflow nor another family.
+
+`tests/test_architecture.py` enforces these rules on the source of the library and of every
+family: a new import across layers fails the tests.
+
+### Design rules
+
+- **Functions first.** A module is a set of functions. Use a class only when it is truly needed:
+  a pydantic model (configuration, validated data), a frozen dataclass (a record passed between
+  modules), a framework's base class (Keras callback, torch `Dataset`, MLflow `PythonModel`), or
+  state that genuinely changes together (`TrainingState`). No class to group functions, no
+  inheritance to share code.
+- **Modules depend on interfaces, not on each other.** Modules talk through the Protocols of
+  `ports.py`; a family is duck-typed (a module with the attributes of `ModelFamily`, checked by
+  `cli.main`), not a subclass. The library never imports a family nor a framework.
+- **Explicit wiring: inject dependencies in the entrypoint.** Each family's `__main__.py` passes
+  the family to `cli.main`; the service receives the family and the parameters; families receive
+  a `MetricLogger` instead of calling MLflow; the serving wrapper receives `load_predictor`. No
+  registry, no lookup by name, no switching environments at run time: the command (DVC stage,
+  Makefile) names the environment and the entrypoint.
+- **One uv project per family, with its Python and framework.** A family needing different
+  environments to train and to serve has one per purpose (`families/matterport` and
+  `families/matterport/serve`), running the same package.
+- **Configuration is validated.** Every `params.yaml` section has a pydantic model (frozen,
+  unknown keys forbidden); code reads attributes, never `params["..."]` dicts.
+- **Framework imports stay in their family and load lazily** in the family's `__init__.py`
+  (inside `train` / `load_predictor`): a family's two environments each lack one framework.
+  `ports.py` doesn't import polars at run time either: a packaged model's serving image has none.
+- **Shared behaviour goes in the service, model logic in the family.** Image selection, MLflow
+  runs, `metrics.json`, packaging and evaluation are written once in `service/`; a family only
+  trains, exports and predicts.
 
 ### Rules specific to this repo
 
@@ -28,41 +96,61 @@ Released packages used here: `fashion-seg-contract` (response schema, RLE, label
     `git checkout data.dvc`.
   - Changing a stage's code or parameters makes it stale: re-run it, `uv run dvc push`, and commit
     `dvc.lock` in the same PR. CI fails on a stale `dvc.lock` (when Drive credentials are set).
+    A packaged model bundles the library and its family's code, and depends on its environment's
+    lock file: changing them re-packages it.
   - Never commit data, models, `mlflow.db` or `mlartifacts/`; never edit `dvc.lock` or `*.dvc` by
     hand.
-- **Models are served through the contract**: package every model with
-  `python -m fashion_seg.package` (`FashionSegmentationModel` + a predictor in
-  `src/fashion_seg/predictors/` returning `Detections`); a packaged model ships only its own
-  framework (see `FAMILIES` in `package.py`). Never log a raw framework flavor (`mlflow.pytorch`...) for
-  serving: fashion-serving only understands the contract.
+- **Models are served through the contract**: every family is packaged by
+  `service/packaging.py` (`FashionSegmentationModel` + the family's `load_predictor` returning
+  `Detections`); a packaged model ships only its family's framework (`SPEC.serving`). Never log a
+  raw framework flavor (`mlflow.pytorch`...) for serving: fashion-serving only understands the
+  contract.
 - **Every model trains and is evaluated on the same data**: `prepared/annotations.parquet` and
-  `prepared/split.json`, read with `fashion_seg_core.annotations`. Models are compared with the
+  `prepared/split.json`, selected by `service/training.py`. Models are compared with the
   `evaluate` stage only (COCO mAP of the packaged model on the val split), never with training
   losses.
-- **MLflow**: training runs go to the `fashion-seg-training` experiment with a `model_family` tag.
-  Every environment pins the same MLflow minor version (they share `mlflow.db`).
-- **Shared code**: training-side helpers go in `packages/core`; anything about the model's response
-  goes in `fashion-seg-contract`; Matterport code goes in `maskrcnn-matterport`. Don't copy code
-  between these places.
-- **Compute**: full training needs the whole dataset (`uv run dvc pull data.dvc`, ~24 GB) and a GPU;
-  locally, use `make pull-sample` and `make train-matterport-smoke`.
+- **MLflow**: experiments and the registered model name are in `params.yaml:tracking`. Every
+  environment pins the same MLflow minor version (they share `mlflow.db`).
+- **Environments**: the library's dependencies (`packages/fashion-seg/pyproject.toml`) stay
+  framework-free and install on Python 3.11 and 3.12; frameworks go in the family's project. Its
+  version is fixed (not the repository's): family lock files record it, so bump it only with its
+  interface, then `uv lock` every environment. Every environment has a `make test-*` target, a
+  pylint hook and a CI test job.
+- **Shared code**: anything about the model's response goes in `fashion-seg-contract`; Matterport
+  network code goes in `maskrcnn-matterport`. Don't copy code between repositories.
+- **Compute**: full training needs the whole dataset (`uv run dvc pull data.dvc`, ~24 GB) and a
+  GPU; locally, use `make pull-sample` and `make train-<family>-smoke`.
 - Google Drive credentials live in the git-ignored `.dvc/config.local`.
 
 ### Adding a model family
 
-Follow `trainers/torchvision/` (see the README, "Add a model family"): trainer project (workspace
-member when it shares the orchestration Python, own environment otherwise), `train_<name>` and
-`package_<name>` stages, a predictor registered in `load_predictor`, its requirements in
-`FAMILIES`, an `evaluate.models` entry, lint hooks and tests.
+1. `families/<name>/pyproject.toml`: package `fashion-seg-<name>` (`src/fashion_seg_<name>/`),
+   its Python, its framework, `fashion-seg` by path (editable), `jsonschema`, `pylint` and
+   `pytest` in `dev`; `uv lock --project families/<name>`. Add a `serve/` environment only if
+   serving needs other versions than training.
+2. `src/fashion_seg_<name>/__init__.py` implements `ports.ModelFamily`: `SPEC` (name, serving
+   requirements), `Config` (a `config.TrainConfig` subclass with `smoke_overrides`), `train`,
+   `load_predictor`, `describe`, importing the framework lazily. The model logic goes in
+   submodules (`network`, `dataset`, `training`, `predictor`). `__main__.py`:
+   `main(fashion_seg_<name>)`.
+3. `params.yaml`: a `train.<name>` section, and a `models.<served name>` entry for its export.
+4. `dvc.yaml`: `train_<name>`, `package_<served name>` and `evaluate_<served name>` stages, each
+   `uv run --project families/<name> --locked python -m fashion_seg_<name> ...`.
+5. Tests in `families/<name>/tests` (port, training smoke run with `fashion_seg.testing`,
+   predictor, packaging round trip); `make test-<name>` and `train-<name>-smoke` targets, a
+   pylint hook, a CI matrix entry, `make install`.
 
 ## Commands
 
 ```bash
-make install                  # orchestration env + Matterport trainer env
+make install                  # all environments (root + each family's)
 make hooks                    # once: install the pre-commit and commit-msg git hooks
 make format                   # ruff format + ruff --fix
 make lint                     # all pre-commit hooks on all files (exactly what CI runs)
-make test                     # both environments' tests, including docstring examples
+make test                     # every environment's tests, including docstring examples
+make test-library             # the library (packages/fashion-seg/tests, doctests)
+make test-architecture        # dependency rules across the library and the families (tests/)
+                              # test-torchvision, test-matterport-train, test-matterport-serve
 make check                    # lint + test: run before every commit
 make prepare                  # dvc repro --single-item prepare
 make pull-sample              # a few images for smoke runs
@@ -71,7 +159,8 @@ make train-torchvision-smoke  # same for torchvision (Apple GPU if available)
 make mlflow-ui                # http://localhost:5002
 make pull-val                 # validation images (VAL_IMAGES=200 for a subset)
 make evaluate-quick MODEL=legacy   # score a packaged model on 200 val images (not DVC-tracked)
-uv run dvc repro --single-item evaluate@legacy   # score it on the whole split
+uv run --project families/torchvision python -m fashion_seg_torchvision --help
+uv run dvc repro --single-item evaluate_legacy   # score it on the whole split
 uv run dvc repro --single-item package_legacy    # re-package a model (or package_torchvision)
 ```
 

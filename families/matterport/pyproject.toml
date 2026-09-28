@@ -1,0 +1,49 @@
+# The Matterport family: its code (src/fashion_seg_matterport) and its training environment,
+# Python 3.11 + TensorFlow 2.15: `uv run --project families/matterport python -m fashion_seg_matterport train`.
+# Packaging and evaluation run in families/matterport/serve (Python 3.12, TensorFlow 2.18+).
+[project]
+name = "fashion-seg-matterport"
+version = "0.1.0"
+description = "Matterport Mask R-CNN family of fashion-seg-train"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "fashion-seg",
+    "maskrcnn-matterport",
+]
+
+[dependency-groups]
+train = ["maskrcnn-matterport[train]"]   # TensorFlow 2.15: Python 3.11 only
+dev = ["jsonschema>=4.26.0", "pylint>=4.0.9", "pytest>=9.1.1"]
+
+[tool.uv]
+default-groups = ["train", "dev"]
+environments = ["python_version < '3.12'"]   # this environment; the package also installs on 3.12
+
+[tool.uv.sources]
+fashion-seg = { path = "../../packages/fashion-seg", editable = true }
+# Released wheels, by URL (same as packages/fashion-seg and families/matterport/serve).
+fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
+maskrcnn-matterport = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl" }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fashion_seg_matterport"]
+
+[tool.pytest.ini_options]
+# Docstring examples are tests too.
+addopts = "--doctest-modules"
+testpaths = ["src", "tests/train"]
+
+[tool.pylint.main]
+py-version = "3.11"
+extension-pkg-allow-list = ["numpy"]
+
+[tool.pylint."messages control"]
+# Import order is ruff's job (isort rules), which knows the first-party packages.
+disable = ["too-few-public-methods", "wrong-import-order", "ungrouped-imports"]
+
+[tool.pylint.format]
+max-line-length = 100

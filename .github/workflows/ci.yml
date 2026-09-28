@@ -42,30 +42,23 @@ jobs:
       - run: make lint
 
   tests:
-    name: Unit and contract tests
+    name: Tests (${{ matrix.env.name }})
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-      - run: uv sync --locked
-      - run: uv run pytest
-
-  trainer-matterport:
-    name: Matterport trainer (smoke training)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-      - run: uv sync --locked --project trainers/matterport
-      - name: Train a tiny model on synthetic data, export it
-        working-directory: trainers/matterport
+    strategy:
+      fail-fast: false
+      matrix:
         env:
-          TF_CPP_MIN_LOG_LEVEL: "3"
-        run: uv run pytest -p no:warnings
+          - { name: "library", project: ".", target: "test-architecture test-library" }
+          - { name: "torchvision", project: families/torchvision, target: test-torchvision }
+          - { name: "matterport training", project: families/matterport, target: test-matterport-train }
+          - { name: "matterport serving", project: families/matterport/serve, target: test-matterport-serve }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --project ${{ matrix.env.project }}
+      - run: make ${{ matrix.env.target }}
 
   secrets-check:
     name: Detect DVC credentials
