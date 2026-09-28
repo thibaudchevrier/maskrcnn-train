@@ -10,10 +10,21 @@ ARTIFACT_ROOT = Path("mlartifacts")
 
 
 def setup_experiment(name: str) -> str:
-    """Point MLflow at ``$MLFLOW_TRACKING_URI`` (local SQLite by default) and select ``name``.
+    """Point MLflow at the tracking store and select an experiment, creating it if needed.
 
-    With the local default, run artifacts go to ``./mlartifacts`` so they don't
-    mix with the legacy DVC-tracked ``./mlruns`` folder.
+    The store is ``$MLFLOW_TRACKING_URI``, local SQLite (``mlflow.db``) by default. With the local
+    default, run artifacts go to ``./mlartifacts/<name>`` so they don't mix with the archived,
+    DVC-tracked ``./mlruns`` folder.
+
+    Parameters
+    ----------
+    name : str
+        Experiment name, e.g. ``fashion-seg-training``.
+
+    Returns
+    -------
+    str
+        The experiment id.
     """
     uri = os.environ.get("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI)
     mlflow.set_tracking_uri(uri)

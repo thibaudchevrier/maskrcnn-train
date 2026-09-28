@@ -6,12 +6,14 @@ import numpy as np
 import polars as pl
 import yaml
 from fashion_seg_contract import rle
+from PIL import Image
+
 from fashion_seg_matterport import train
 from fashion_seg_matterport.dataset import FashionDataset
-from PIL import Image
 
 
 def _write_dataset(root):
+    """Write four synthetic images, their prepared annotations, a split and labels."""
     image_dir = root / "images"
     image_dir.mkdir()
     rows = []
@@ -42,6 +44,7 @@ def _write_dataset(root):
 
 
 def test_dataset_maps_categories_to_model_classes(tmp_path):
+    """Dataset category k becomes model class k + 1, with the decoded mask."""
     image_dir, prepared, _ = _write_dataset(tmp_path)
     records = pl.read_parquet(prepared / "annotations.parquet")
     names = ["BG"] + [f"c{k}" for k in range(46)]
@@ -52,6 +55,7 @@ def test_dataset_maps_categories_to_model_classes(tmp_path):
 
 
 def test_smoke_training_exports_servable_model(tmp_path, monkeypatch):
+    """A smoke run trains, exports config.json + SavedModel (training anchors) and metrics."""
     image_dir, prepared, labels = _write_dataset(tmp_path)
     params = {
         "data": {

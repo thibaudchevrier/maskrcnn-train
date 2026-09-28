@@ -12,12 +12,43 @@ from pathlib import Path
 
 import polars as pl
 import yaml
-from fashion_seg_core import annotations
 from sklearn.model_selection import KFold
 
+from fashion_seg_core import annotations
 
-def split_image_ids(image_ids: list[str], n_folds: int, fold: int, seed: int) -> dict[str, list]:
-    """Train/val image ids for one fold; ``image_ids`` must already be sorted."""
+
+def split_image_ids(
+    image_ids: list[str], n_folds: int, fold: int, seed: int
+) -> dict[str, list[str]]:
+    """Split images into train and validation for one K-fold fold.
+
+    Parameters
+    ----------
+    image_ids : list[str]
+        Image ids, already sorted (the split depends on their order).
+    n_folds : int
+        Number of folds.
+    fold : int
+        Index of the fold kept for validation.
+    seed : int
+        Shuffle seed.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Image ids under ``"train"`` and ``"val"``.
+
+    Raises
+    ------
+    ValueError
+        If ``fold`` is not in ``range(n_folds)``.
+
+    Examples
+    --------
+    >>> split = split_image_ids(["a", "b", "c", "d"], n_folds=2, fold=0, seed=0)
+    >>> sorted(split["train"] + split["val"])
+    ['a', 'b', 'c', 'd']
+    """
     folds = KFold(n_splits=n_folds, shuffle=True, random_state=seed).split(image_ids)
     for index, (train_idx, val_idx) in enumerate(folds):
         if index == fold:
@@ -29,7 +60,7 @@ def split_image_ids(image_ids: list[str], n_folds: int, fold: int, seed: int) ->
 
 
 def main() -> None:
-    """Write ``prepared/annotations.parquet`` and ``prepared/split.json``."""
+    """Write ``prepared/annotations.parquet`` and ``prepared/split.json`` from ``params.yaml``."""
     params = yaml.safe_load(Path("params.yaml").read_text(encoding="utf-8"))
     paths, split = params["data"], params["split"]
     output_dir = Path(paths["prepared_dir"])
