@@ -15,18 +15,18 @@ stages:
       nfiles: 4
     - path: families/matterport/serve/uv.lock
       hash: md5
-      md5: 6ad63fe30d72d1b4dda808b484c1cebc
-      size: 235537
+      md5: 8cccf59ec0429e65efca746a5445113c
+      size: 235627
     - path: families/matterport/src
       hash: md5
-      md5: f6a237b8403d7cc6c08657853c82c29e.dir
-      size: 15487
-      nfiles: 5
+      md5: 26b7707aa160fb7e738cf3a5df69f2d1.dir
+      size: 15534
+      nfiles: 6
     - path: packages/fashion-seg/src/fashion_seg
       hash: md5
-      md5: a5a78b9c4c187e512d260d165cb49fa1.dir
-      size: 66653
-      nfiles: 18
+      md5: e4dbe9b73a61ba7297442a1fd22af149.dir
+      size: 78346
+      nfiles: 21
     params:
       params.yaml:
         models.legacy:
@@ -38,9 +38,9 @@ stages:
     outs:
     - path: models/fashion-maskrcnn
       hash: md5
-      md5: f12735f24115bbe2580f01ba9f362acb.dir
-      size: 266147568
-      nfiles: 39
+      md5: 76552d0617dcb91d353e8c858ccd17eb.dir
+      size: 266159841
+      nfiles: 43
   prepare:
     cmd: python -m fashion_seg prepare
     deps:

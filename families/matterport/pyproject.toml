@@ -13,7 +13,7 @@ dependencies = [
 
 [dependency-groups]
 train = ["maskrcnn-matterport[train]"]   # TensorFlow 2.15: Python 3.11 only
-dev = ["jsonschema>=4.26.0", "pylint>=4.0.9", "pytest>=9.1.1"]
+dev = ["fashion-seg-testing", "jsonschema>=4.26.0", "pylint>=4.0.9", "pytest>=9.1.1"]
 
 [tool.uv]
 default-groups = ["train", "dev"]
@@ -21,6 +21,7 @@ environments = ["python_version < '3.12'"]   # this environment; the package als
 
 [tool.uv.sources]
 fashion-seg = { path = "../../packages/fashion-seg", editable = true }
+fashion-seg-testing = { path = "../../packages/fashion-seg-testing", editable = true }
 # Released wheel, by URL. fashion-seg-contract's is declared by packages/fashion-seg: uv reads
 # the sources of path dependencies.
 maskrcnn-matterport = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl" }

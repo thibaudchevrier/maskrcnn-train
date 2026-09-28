@@ -7,18 +7,12 @@ image, sorted by ``image_id``, and stores it as Parquet so every trainer loads i
     class_ids: list[int]  (dataset category ids, 0-based; model class = category + 1),
     rles: list[str]       (one RLE mask per class id, see ``fashion_seg_contract.rle``)
 
-Every model trains and is evaluated on these files: ``ANNOTATIONS_FILE`` and ``SPLIT_FILE`` in the
-prepared directory.
+Pure functions on DataFrames; reading and writing the files is ``fashion_seg.data.files``.
 """
-
-import json
-from pathlib import Path
 
 import polars as pl
 
 COLUMNS = ["image_id", "height", "width", "class_ids", "rles"]
-ANNOTATIONS_FILE = "annotations.parquet"
-SPLIT_FILE = "split.json"
 
 
 def group_by_image(masks: pl.DataFrame) -> pl.DataFrame:
@@ -51,80 +45,35 @@ def group_by_image(masks: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def load(path: str | Path, image_ids: list[str] | None = None) -> pl.DataFrame:
-    """Read the prepared annotations, optionally restricted to some images.
+def select(frame: pl.DataFrame, image_ids: list[str]) -> pl.DataFrame:
+    """Keep the annotations of some images, in the given order.
 
     Parameters
     ----------
-    path : str | Path
-        Path of ``annotations.parquet``.
-    image_ids : list[str] | None
-        Images to keep, in the order to return them. By default ``None``: every image.
+    frame : pl.DataFrame
+        Per-image annotations, the ``COLUMNS`` of this module.
+    image_ids : list[str]
+        Images to keep, in the order to return them.
 
     Returns
     -------
     pl.DataFrame
-        One row per image with the ``COLUMNS`` of this module.
+        Their annotations.
 
     Raises
     ------
     KeyError
-        If some of ``image_ids`` are not in the annotations.
+        If some of ``image_ids`` are not in ``frame``.
+
+    Examples
+    --------
+    >>> frame = pl.DataFrame({"image_id": ["a", "b"], "height": [1, 2]})
+    >>> select(frame, ["b", "a"])["image_id"].to_list()
+    ['b', 'a']
     """
-    frame = pl.read_parquet(path)
-    if image_ids is None:
-        return frame
     order = pl.DataFrame({"image_id": image_ids})
     selected = order.join(frame, on="image_id", how="left", maintain_order="left")
     missing = selected.filter(pl.col("height").is_null())["image_id"].to_list()
     if missing:
-        raise KeyError(f"{len(missing)} image ids not in {path}, e.g. {missing[:3]}")
+        raise KeyError(f"{len(missing)} image ids not in the annotations, e.g. {missing[:3]}")
     return selected
-
-
-def load_split(path: str | Path) -> dict[str, list[str]]:
-    """Read the frozen train/val split.
-
-    Parameters
-    ----------
-    path : str | Path
-        Path of ``split.json``.
-
-    Returns
-    -------
-    dict[str, list[str]]
-        Image ids under ``"train"`` and ``"val"``.
-    """
-    split = json.loads(Path(path).read_text(encoding="utf-8"))
-    return {"train": split["train"], "val": split["val"]}
-
-
-def select_ids(
-    ids: list[str], image_dir: Path, limit: int | None = None, local_only: bool = False
-) -> list[str]:
-    """Pick images of a split: optionally only those on disk, then the first ``limit``.
-
-    Parameters
-    ----------
-    ids : list[str]
-        Image ids of the split, in order.
-    image_dir : Path
-        Directory of the ``<image_id>.jpg`` files.
-    limit : int | None
-        Maximum number of images; ``None`` for all. By default ``None``.
-    local_only : bool
-        Keep only the images present in ``image_dir`` (partial pulls). By default ``False``.
-
-    Returns
-    -------
-    list[str]
-        The selected image ids, in split order.
-
-    Examples
-    --------
-    >>> select_ids(["a", "b", "c"], Path("."), limit=2)
-    ['a', 'b']
-    """
-    if local_only:
-        ids = [i for i in ids if (image_dir / f"{i}.jpg").exists()]
-    return ids[:limit] if limit else ids

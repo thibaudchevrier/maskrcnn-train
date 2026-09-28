@@ -12,7 +12,7 @@ from fashion_seg.cli import main
 from fashion_seg.config import TrainConfig
 from fashion_seg.ports import FamilySpec, ServingRequirements, TrainInputs, TrainResult
 from fashion_seg.service.training import output_dir_of, smoke_config
-from fashion_seg.testing import write_dataset, write_params
+from fashion_seg_testing import write_dataset, write_params
 
 
 class FakeConfig(TrainConfig):

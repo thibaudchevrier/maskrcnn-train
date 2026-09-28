@@ -1,14 +1,21 @@
-"""Ports: the interfaces between the workflow (``fashion_seg.service``) and the model families.
+"""Ports: the interfaces between the workflow (``fashion_seg.service``) and what it drives.
 
-The service only knows these types. Each family (``families/<name>``, its own uv project)
-implements ``ModelFamily`` by duck typing: a module with the right attributes, no base class to
-inherit. The family's entrypoint passes it to ``fashion_seg.cli.main``.
-Nothing here imports a deep-learning framework (nor polars, used for type hints only), so every
+The service only knows these types:
+
+- ``ModelFamily``: a model family (``families/<name>``, its own uv project), implemented by
+  duck typing: a module with the right attributes, no base class to inherit;
+- ``Tracker`` and ``ModelRepository``: experiment tracking and the model registry, implemented
+  with MLflow by ``fashion_seg.adapters``.
+
+``fashion_seg.cli.main`` (called by each family's entrypoint) wires them together. Nothing here
+imports a deep-learning framework nor MLflow (nor polars, used for type hints only), so every
 environment can load it, including the serving image of a packaged model.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
@@ -19,6 +26,7 @@ from fashion_seg.config import Frozen, TrainConfig
 
 if TYPE_CHECKING:  # the serving image has no polars; only training passes DataFrames
     import polars as pl
+    from fashion_seg_contract.schema import Prediction
 
 
 @dataclass(frozen=True)
@@ -220,3 +228,190 @@ class ModelFamily(Protocol):
         dict[str, Any]
             Settings, by name.
         """
+
+
+@runtime_checkable
+class Tracker(Protocol):
+    """Experiment tracking: runs, with their parameters, metrics, tags and artifacts.
+
+    Logging calls apply to the run opened by ``run``.
+    """
+
+    def run(self, experiment: str, name: str, tags: dict[str, str]) -> AbstractContextManager[str]:
+        """Open a run for the duration of a ``with`` block.
+
+        Parameters
+        ----------
+        experiment : str
+            Experiment of the run, created if needed.
+        name : str
+            Run name.
+        tags : dict[str, str]
+            Tags set when the run starts.
+
+        Returns
+        -------
+        AbstractContextManager[str]
+            Context manager giving the run id.
+        """
+
+    def set_tags(self, tags: dict[str, str]) -> None:
+        """Tag the current run.
+
+        Parameters
+        ----------
+        tags : dict[str, str]
+            Tags, by name.
+        """
+
+    def log_params(self, params: dict[str, Any]) -> None:
+        """Record parameters of the current run.
+
+        Parameters
+        ----------
+        params : dict[str, Any]
+            Parameters, by name.
+        """
+
+    def log_metrics(self, metrics: dict[str, float], step: int | None = None) -> None:
+        """Record metrics of the current run (a ``MetricLogger``).
+
+        Parameters
+        ----------
+        metrics : dict[str, float]
+            Metric values, by name.
+        step : int | None
+            Training step (or epoch). By default ``None``.
+        """
+
+    def log_artifacts(self, local_dir: Path, artifact_path: str) -> None:
+        """Attach a directory to the current run.
+
+        Parameters
+        ----------
+        local_dir : Path
+            Directory to upload.
+        artifact_path : str
+            Its path within the run's artifacts.
+        """
+
+    def log_table(self, table: pl.DataFrame, file_name: str) -> None:
+        """Attach a table to the current run, as a CSV file.
+
+        Parameters
+        ----------
+        table : pl.DataFrame
+            The table.
+        file_name : str
+            Name of the CSV file among the run's artifacts.
+        """
+
+
+@dataclass(frozen=True)
+class ModelPackage:
+    """A model export to serve through the contract, and what serving it needs.
+
+    Attributes
+    ----------
+    family : str
+        Model family name.
+    load_predictor : Callable[[Path], Predictor]
+        The family's ``load_predictor``, called on the export when the model is loaded.
+    export_dir : Path
+        The export (trained model files).
+    label_file : Path
+        ``label_descriptions.json`` (class names).
+    code_dirs : list[Path]
+        Python packages to bundle with the model.
+    requirements : list[str]
+        pip requirement lines of the serving environment.
+    """
+
+    family: str
+    load_predictor: Callable[[Path], Predictor]
+    export_dir: Path
+    label_file: Path
+    code_dirs: list[Path]
+    requirements: list[str]
+
+
+@runtime_checkable
+class ModelRepository(Protocol):
+    """Where packaged models are published, versioned, and loaded as they are served."""
+
+    def publish(
+        self, package: ModelPackage, registered_name: str, output_dir: Path
+    ) -> dict[str, Any]:
+        """Package a model in the current tracking run, register a new version, save a copy.
+
+        Parameters
+        ----------
+        package : ModelPackage
+            What to package.
+        registered_name : str
+            Registered model receiving the new version.
+        output_dir : Path
+            Where to save the packaged model (replaced if present), with its provenance.
+
+        Returns
+        -------
+        dict[str, Any]
+            Provenance: tracking run, model URI, family, registered name and version.
+        """
+
+    def provenance(self, model_dir: Path) -> dict[str, Any]:
+        """Read the provenance saved with a packaged model.
+
+        Parameters
+        ----------
+        model_dir : Path
+            A packaged model, as saved by ``publish``.
+
+        Returns
+        -------
+        dict[str, Any]
+            Its provenance.
+        """
+
+    def load(self, model_dir: Path) -> Callable[[bytes, float], Prediction]:
+        """Load a packaged model exactly as it is served.
+
+        Parameters
+        ----------
+        model_dir : Path
+            A packaged model, as saved by ``publish``.
+
+        Returns
+        -------
+        Callable[[bytes, float], Prediction]
+            Predicts one encoded image (JPEG or PNG) with a ``min_score``.
+        """
+
+    def tag_version(self, registered_name: str, version: str, tags: dict[str, str]) -> None:
+        """Tag a registered model version (e.g. with its evaluation scores).
+
+        Parameters
+        ----------
+        registered_name : str
+            Registered model.
+        version : str
+            Its version.
+        tags : dict[str, str]
+            Tags, by name.
+        """
+
+
+@dataclass(frozen=True)
+class Infrastructure:
+    """The infrastructure a workflow step drives, built by the composition root.
+
+    Attributes
+    ----------
+    tracker : Tracker
+        Experiment tracking.
+    repository : ModelRepository
+        Packaged models: publish, load, tag.
+    """
+
+    tracker: Tracker
+    repository: ModelRepository

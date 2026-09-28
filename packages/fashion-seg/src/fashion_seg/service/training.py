@@ -1,25 +1,20 @@
-"""Train step: train any model family on the prepared data and split, tracked in MLflow.
+"""Train step: train any model family on the prepared data and split, tracked by a ``Tracker``.
 
 The family does the model work (``ModelFamily.train``); this step does the rest, identically for
-every family: select the images, log parameters and tags, record the metrics, write
-``metrics.json`` and log the export. Outputs, in ``output_dir`` (``<output_dir>-smoke`` for a
-smoke run):
+every family: select the images, open a tracked run, record parameters, metrics and tags, and log
+the export. The family writes, in ``output_dir_of(config, smoke)``:
 
 - ``model/``: the servable export (DVC-tracked);
-- ``checkpoints/``: the family's checkpoints (git- and DVC-ignored);
-- ``metrics.json``: the final metrics (``dvc metrics show``).
+- ``checkpoints/``: its checkpoints (git- and DVC-ignored).
 """
 
-import json
 from pathlib import Path
 
-import mlflow
 from fashion_seg_contract.labels import load_class_names
 
 from fashion_seg.config import DataConfig, Params, TrainConfig
-from fashion_seg.data import annotations
-from fashion_seg.ports import ModelFamily, TrainInputs, TrainResult
-from fashion_seg.tracking import setup_experiment
+from fashion_seg.data import files
+from fashion_seg.ports import ModelFamily, Tracker, TrainInputs, TrainResult
 
 
 def smoke_config(config: TrainConfig) -> TrainConfig:
@@ -86,24 +81,21 @@ def load_inputs(
     SystemExit
         If no training or validation image is available.
     """
-    split = annotations.load_split(data.prepared_dir / annotations.SPLIT_FILE)
+    split = files.load_split(data.prepared_dir)
     ids = {
-        "train": annotations.select_ids(
+        "train": files.select_ids(
             split["train"], data.train_images, config.max_train_images, local_only
         ),
-        "val": annotations.select_ids(
-            split["val"], data.train_images, config.max_val_images, local_only
-        ),
+        "val": files.select_ids(split["val"], data.train_images, config.max_val_images, local_only),
     }
     if not ids["train"] or not ids["val"]:
         raise SystemExit(
             f"No training/validation images in {data.train_images}: run "
             "`uv run dvc pull data.dvc` (or `make pull-sample` for a smoke run)."
         )
-    annotations_file = data.prepared_dir / annotations.ANNOTATIONS_FILE
     return TrainInputs(
-        train=annotations.load(annotations_file, ids["train"]),
-        val=annotations.load(annotations_file, ids["val"]),
+        train=files.load_annotations(data.prepared_dir, ids["train"]),
+        val=files.load_annotations(data.prepared_dir, ids["val"]),
         image_dir=data.train_images,
         class_names=load_class_names(data.label_file),
         export_dir=output_dir / "model",
@@ -112,9 +104,14 @@ def load_inputs(
 
 
 def train(
-    family: ModelFamily, config: TrainConfig, params: Params, *, smoke: bool = False
+    family: ModelFamily,
+    config: TrainConfig,
+    params: Params,
+    tracker: Tracker,
+    *,
+    smoke: bool = False,
 ) -> TrainResult:
-    """Train a family's model in an MLflow run, then write ``metrics.json``.
+    """Train a family's model in a tracked run.
 
     Parameters
     ----------
@@ -124,6 +121,8 @@ def train(
         Its training parameters (an instance of ``family.Config``).
     params : Params
         The pipeline parameters (data, split, tracking).
+    tracker : Tracker
+        Records the run: parameters, the family's metrics, tags and the export.
     smoke : bool
         Smoke run: the family's smoke overrides, images on disk only, COCO weights optional,
         export not logged. By default ``False``.
@@ -142,14 +141,12 @@ def train(
         config = smoke_config(config)
     elif not config.init_weights.exists():
         raise SystemExit(f"{config.init_weights} missing: run `uv run dvc pull weights/`")
-    output_dir = output_dir_of(config, smoke)
-    inputs = load_inputs(config, params.data, output_dir, local_only=smoke)
+    inputs = load_inputs(config, params.data, output_dir_of(config, smoke), local_only=smoke)
 
     name = family.SPEC.name
-    setup_experiment(params.tracking.training_experiment)
-    with mlflow.start_run(run_name=f"{name}-smoke" if smoke else name):
-        mlflow.set_tags({"model_family": name, "smoke": str(smoke).lower()})
-        mlflow.log_params(
+    tags = {"model_family": name, "smoke": str(smoke).lower()}
+    with tracker.run(params.tracking.training_experiment, f"{name}-smoke" if smoke else name, tags):
+        tracker.log_params(
             {
                 **config.model_dump(mode="json"),
                 **{f"split.{k}": v for k, v in params.split.model_dump().items()},
@@ -157,11 +154,8 @@ def train(
                 "n_val_images": inputs.val.height,
             }
         )
-        result = family.train(config, inputs, mlflow.log_metrics)
-        mlflow.set_tags(result.tags)
-        (output_dir / "metrics.json").write_text(
-            json.dumps(result.metrics, indent=2) + "\n", encoding="utf-8"
-        )
+        result = family.train(config, inputs, tracker.log_metrics)
+        tracker.set_tags(result.tags)
         if not smoke:
-            mlflow.log_artifacts(str(inputs.export_dir), artifact_path="model")
+            tracker.log_artifacts(inputs.export_dir, "model")
     return result

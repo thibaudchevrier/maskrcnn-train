@@ -6,12 +6,9 @@ Writes to the directories the service gives (``TrainInputs``):
 - ``checkpoint_dir``: Keras checkpoints of every epoch.
 """
 
-from __future__ import annotations
-
 import shutil
 from importlib.metadata import version
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import keras  # Keras 2.15, the same package as tf.keras in TensorFlow 2.15
 import tensorflow as tf
@@ -19,10 +16,8 @@ from mrcnn import config as mconfig
 from mrcnn import model as modellib
 
 from fashion_seg.ports import MetricLogger, TrainInputs, TrainResult
+from fashion_seg_matterport.config import Config
 from fashion_seg_matterport.dataset import FashionDataset
-
-if TYPE_CHECKING:  # the family's package imports this module lazily: no import cycle
-    from fashion_seg_matterport import Config
 
 # Layers re-initialised when starting from COCO: they depend on the number of classes.
 HEAD_LAYERS = ["mrcnn_class_logits", "mrcnn_bbox_fc", "mrcnn_bbox", "mrcnn_mask"]

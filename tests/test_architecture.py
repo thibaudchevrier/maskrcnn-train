@@ -20,17 +20,17 @@ ALLOWED = {
     "config": set(),
     "data": set(),
     "scoring": set(),
-    "tracking": set(),
-    "testing": set(),
     "ports": {"config"},
     "serving": {"ports"},
-    "service": {"config", "data", "ports", "scoring", "serving", "tracking"},
-    "cli": {"config", "ports", "service"},
+    "adapters": {"ports", "serving"},
+    "service": {"config", "data", "ports", "scoring"},
+    "cli": {"adapters", "config", "ports", "service"},
     "__main__": {"config", "service"},
 }
-# MLflow belongs to the workflow, the serving wrapper and tracking: families record metrics
-# through a MetricLogger.
-MLFLOW_LAYERS = {"service", "serving", "tracking"}
+# Infrastructure libraries, only in the adapters and the serving wrapper (itself an MLflow
+# model): the workflow reaches them through the ports, families through a MetricLogger.
+INFRASTRUCTURE = {"mlflow"}
+INFRASTRUCTURE_LAYERS = {"adapters", "serving"}
 FRAMEWORKS = {"torch", "torchvision", "tensorflow", "keras", "mrcnn"}
 
 
@@ -63,8 +63,8 @@ def test_library_modules_respect_the_dependency_rules(path):
         return
     used = {name.split(".")[1] for name in imports if name.startswith("fashion_seg.")} - {layer}
     assert used <= ALLOWED[layer], f"{layer} imports {used - ALLOWED[layer]}"
-    if layer not in MLFLOW_LAYERS:
-        assert "mlflow" not in _roots(imports)
+    if layer not in INFRASTRUCTURE_LAYERS:
+        assert not _roots(imports) & INFRASTRUCTURE
 
 
 @pytest.mark.parametrize(

@@ -20,16 +20,18 @@ dev = [
     "pyopenssl>=24.2.1",
     "pytest>=9.1.1",
     "ruff>=0.16.9",
+    "fashion-seg-testing",
 ]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["packages/fashion-seg"]
+members = ["packages/fashion-seg", "packages/fashion-seg-testing"]
 
 [tool.uv.sources]
 fashion-seg = { workspace = true }
+fashion-seg-testing = { workspace = true }
 
 # Lint config for all Python code. pylint's is per environment: here for the root environment
 # (packages/fashion-seg, tests), in families/<name>/pyproject.toml for each family.
@@ -43,7 +45,7 @@ extend-exclude = ["models", "outputs", "mlartifacts", "mlruns"]
 select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "D"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["fashion_seg", "fashion_seg_matterport", "fashion_seg_torchvision"]
+known-first-party = ["fashion_seg", "fashion_seg_matterport", "fashion_seg_testing", "fashion_seg_torchvision"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

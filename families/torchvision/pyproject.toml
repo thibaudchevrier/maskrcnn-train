@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["jsonschema>=4.26.0", "pylint>=4.0.9", "pytest>=9.1.1"]
+dev = ["fashion-seg-testing", "jsonschema>=4.26.0", "pylint>=4.0.9", "pytest>=9.1.1"]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
@@ -21,6 +21,7 @@ explicit = true
 
 [tool.uv.sources]
 fashion-seg = { path = "../../packages/fashion-seg", editable = true }
+fashion-seg-testing = { path = "../../packages/fashion-seg-testing", editable = true }
 # Linux (CI, Docker, cloud CPU): CPU-only PyTorch wheels, without ~2 GB of CUDA libraries.
 # macOS wheels include the Apple GPU (MPS) backend.
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]

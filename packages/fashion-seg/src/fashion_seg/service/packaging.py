@@ -1,15 +1,13 @@
-"""Package step: wrap any family's export as a self-contained MLflow pyfunc model, and register it.
+"""Package step: publish any family's export as a model served through the contract.
 
-For the served model ``params.yaml:models.<name>``:
+For the served model ``params.yaml:models.<name>``, in a tracked run: describe the export, then
+publish it to the ``ModelRepository`` (a new registered version, and a copy in ``output_dir``
+that DVC versions and fashion-serving imports).
 
-- logs a run in MLflow and registers a new version of the model;
-- saves the same model to ``output_dir`` so DVC can version and push it; fashion-serving imports
-  it with ``dvc import``.
-
-Every model is served by ``FashionSegmentationModel`` (the contract), with the family's predictor.
-It bundles the code of ``fashion_seg`` and of the family, and pins its runtime requirements to the
-versions installed in the family's environment (released packages by wheel URL), so a serving
-environment only needs ``pip install -r requirements.txt``. Each family ships only its framework.
+A packaged model bundles the code of ``fashion_seg`` and of the family, and pins its runtime
+requirements to the versions installed in the family's environment (released packages by wheel
+URL), so a serving environment only needs ``pip install -r requirements.txt``. Each family ships
+only its own framework.
 
 Run through DVC in the family's serving environment: ``uv run dvc repro --single-item
 package_legacy`` (or ``package_torchvision``).
@@ -17,27 +15,13 @@ package_legacy`` (or ``package_torchvision``).
 
 import importlib
 import json
-import shutil
 from importlib.metadata import distribution, version
 from pathlib import Path
 from typing import Any
 
-import mlflow
-import numpy as np
-from fashion_seg_contract import request
-from mlflow.models import ModelSignature
-from mlflow.types import ColSpec, ParamSchema, ParamSpec, Schema
-
 import fashion_seg
 from fashion_seg.config import PackagedModel, Params
-from fashion_seg.ports import ModelFamily, ServingRequirements
-from fashion_seg.serving.pyfunc import FashionSegmentationModel, encode_image
-from fashion_seg.tracking import setup_experiment
-
-SIGNATURE = ModelSignature(
-    inputs=Schema([ColSpec("string", request.IMAGE_FIELD)]),
-    params=ParamSchema([ParamSpec(request.MIN_SCORE_PARAM, "double", request.DEFAULT_MIN_SCORE)]),
-)
+from fashion_seg.ports import Infrastructure, ModelFamily, ModelPackage, ServingRequirements
 
 # What the serving wrapper itself needs, whatever the family: added to each family's own.
 WRAPPER_REQUIREMENTS = ServingRequirements(
@@ -92,7 +76,7 @@ def _installed_from(name: str) -> str:
     return json.loads(direct_url)["url"]
 
 
-def code_paths(family: ModelFamily) -> list[str]:
+def code_dirs(family: ModelFamily) -> list[Path]:
     """Locate the code bundled in the model: ``fashion_seg`` and the family's package.
 
     Parameters
@@ -102,73 +86,54 @@ def code_paths(family: ModelFamily) -> list[str]:
 
     Returns
     -------
-    list[str]
+    list[Path]
         The two package directories.
     """
     family_package = importlib.import_module(family.load_predictor.__module__.split(".")[0])
-    return [str(Path(module.__file__).parent) for module in (fashion_seg, family_package)]
+    return [Path(module.__file__).parent for module in (fashion_seg, family_package)]
 
 
-def input_example() -> dict[str, list[str]]:
-    """Build a small random image request, used by MLflow to validate the model and document it.
-
-    Returns
-    -------
-    dict[str, list[str]]
-        One base64 PNG under the ``image`` column.
-    """
-    rng = np.random.default_rng(0)
-    image = rng.integers(0, 255, size=(64, 48, 3), dtype=np.uint8)
-    return {request.IMAGE_FIELD: [encode_image(image)]}
-
-
-def package(family: ModelFamily, name: str, model: PackagedModel, params: Params) -> dict[str, Any]:
-    """Log, register and save a family's export as an MLflow pyfunc model.
+def package(
+    family: ModelFamily,
+    name: str,
+    model: PackagedModel,
+    params: Params,
+    infra: Infrastructure,
+) -> dict[str, Any]:
+    """Publish a family's export in a tracked run.
 
     Parameters
     ----------
     family : ModelFamily
         The export's model family.
     name : str
-        Name of the served model (``params.yaml:models.<name>``), in the MLflow run name.
+        Name of the served model (``params.yaml:models.<name>``), in the run name.
     model : PackagedModel
         The export to package, and where to write the packaged model.
     params : Params
         The pipeline parameters (label file, tracking).
+    infra : Infrastructure
+        The tracker records the run; the repository publishes the model.
 
     Returns
     -------
     dict[str, Any]
-        Provenance of the packaged model (MLflow run, model URI, family, registered name and
-        version), also written to ``provenance.json``.
+        Provenance of the packaged model (tracking run, model URI, family, registered name and
+        version).
     """
-    model_kwargs = {
-        "python_model": FashionSegmentationModel(load_predictor=family.load_predictor),
-        "artifacts": {"model": str(model.source), "labels": str(params.data.label_file)},
-        "code_paths": code_paths(family),
-        "pip_requirements": pip_requirements(family.SPEC.serving),
-        "signature": SIGNATURE,
-        "input_example": input_example(),
-    }
-    registered_name = params.tracking.registered_name
-    setup_experiment(params.tracking.packaging_experiment)
-    with mlflow.start_run(run_name=f"package-{name}") as run:
-        mlflow.set_tags({"model_family": family.SPEC.name, "packaged_model": name})
-        mlflow.log_params({f"model.{k}": v for k, v in family.describe(model.source).items()})
-        info = mlflow.pyfunc.log_model(
-            name="model", registered_model_name=registered_name, **model_kwargs
-        )
-    if model.output_dir.exists():
-        shutil.rmtree(model.output_dir)
-    mlflow.pyfunc.save_model(path=str(model.output_dir), **model_kwargs)
-    provenance = {
-        "mlflow_run_id": run.info.run_id,
-        "model_uri": info.model_uri,
-        "model_family": family.SPEC.name,
-        "registered_name": registered_name,
-        "registered_version": info.registered_model_version,
-    }
-    (model.output_dir / "provenance.json").write_text(
-        json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
+    to_publish = ModelPackage(
+        family=family.SPEC.name,
+        load_predictor=family.load_predictor,
+        export_dir=model.source,
+        label_file=params.data.label_file,
+        code_dirs=code_dirs(family),
+        requirements=pip_requirements(family.SPEC.serving),
     )
-    return provenance
+    tags = {"model_family": family.SPEC.name, "packaged_model": name}
+    with infra.tracker.run(params.tracking.packaging_experiment, f"package-{name}", tags):
+        infra.tracker.log_params(
+            {f"model.{k}": v for k, v in family.describe(model.source).items()}
+        )
+        return infra.repository.publish(
+            to_publish, params.tracking.registered_name, model.output_dir
+        )
