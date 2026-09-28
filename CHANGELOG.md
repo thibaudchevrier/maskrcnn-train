@@ -1,3 +1,9 @@
+## v0.2.1 (2026-09-28)
+
+### Fix
+
+- **legacy**: serve the 2021 model with the anchors it was trained with
+
 ## v0.2.0 (2026-09-28)
 
 ### Feat
