@@ -21,10 +21,12 @@ which [fashion-serving](https://github.com/thibaudchevrier/fashion-serving) impo
 ## Architecture: ports and adapters, one entrypoint per family
 
 The pattern is **ports and adapters** (hexagonal architecture): the workflow is written once
-against interfaces (the ports, `fashion_seg.ports`), each model family is an adapter
-implementing them, and each family's **entrypoint is its composition root**: it imports the
-family and injects it into the generic command line. No lookup by name, no dynamic dispatch: the
-code that runs is the code the entrypoint imports, in the environment the command names.
+against interfaces (the ports, `fashion_seg.ports`), and everything it drives is an adapter
+implementing them: each model family, and the infrastructure (MLflow tracking and model registry,
+`fashion_seg.adapters`). Each family's **entrypoint is its composition root**: it injects the
+family into the generic command line, which adds the infrastructure. No lookup by name, no
+dynamic dispatch: the code that runs is the code the entrypoint imports, in the environment the
+command names.
 
 ```
 uv run --project families/torchvision python -m fashion_seg_torchvision train
@@ -34,22 +36,23 @@ uv run --project families/torchvision python -m fashion_seg_torchvision train
      from fashion_seg.cli import main              load_predictor, describe
      main(fashion_seg_torchvision)             ── injection
                                                      │
- packages/fashion-seg: cli.main(family) ─► service/training.train(family, config, params)
-                                           service/packaging, service/evaluation
-                                           (the workflow, written once, knows only the ports)
+ packages/fashion-seg: cli.main(family)     builds Infrastructure(tracker=mlflow_tracking,
+                                                               repository=mlflow_models)
+     ─► service/training.train(family, config, params, tracker)
+        service/packaging.package(..., infra), service/evaluation.evaluate(..., infra)
+        (the workflow, written once, knows only the ports; the CLI writes the result files)
 ```
 
 | Module (`packages/fashion-seg/src/fashion_seg/`) | Role | May import (from `fashion_seg`) |
 |--------|------|------|
 | `config.py` | pydantic models of `params.yaml`; `TrainConfig`, the base of every family's config | nothing |
-| `data/` | Annotations (`annotations.py`) and the frozen split (`split.py`): pure dataset logic | nothing |
+| `data/` | Pure dataset logic (`annotations.py`: per-image grouping and selection; `split.py`: the frozen split) and its files (`files.py`: `train.csv`, prepared annotations and split, images on disk) | itself |
 | `scoring.py` | COCO mask and box mAP of contract predictions (pycocotools) | nothing |
-| `tracking.py` | MLflow tracking store and experiments | nothing |
-| `testing.py` | Synthetic dataset and `params.yaml` for the families' end-to-end tests | nothing |
-| `ports.py` | The interfaces: `ModelFamily`, `Predictor`, `MetricLogger` (Protocols), `Detections`, `TrainInputs`, `TrainResult`, `FamilySpec` | `config` |
-| `serving/pyfunc.py` | MLflow pyfunc wrapper serving any family through the contract; the family's `load_predictor` is injected (and pickled with the model) | `ports` |
-| `service/` | **The workflow, generic over families**: `preparation`, `training` (selection, MLflow run, metrics), `packaging` (MLflow model, registry), `evaluation` | `config`, `data`, `ports`, `scoring`, `serving`, `tracking` |
-| `cli.py` | `main(family, argv)`: `train`, `package <model>`, `evaluate <model>` with the injected family | `config`, `ports`, `service` |
+| `ports.py` | The interfaces: `ModelFamily`, `Predictor`, `MetricLogger`, `Tracker`, `ModelRepository` (Protocols), `Detections`, `TrainInputs`, `TrainResult`, `ModelPackage`, `Infrastructure`, `FamilySpec` | `config` |
+| `serving/` | `response.py`: the contract response built from `Detections` (pure); `pyfunc.py`: the MLflow pyfunc wrapper serving any family (the family's `load_predictor` is injected and pickled with the model) | `ports` |
+| `adapters/` | **Infrastructure**, behind the ports: `mlflow_tracking` (a `Tracker`), `mlflow_models` (a `ModelRepository`: log, register, save, load, tag). Modules of functions, duck-typed like the families | `ports`, `serving` |
+| `service/` | **The workflow, generic over families and infrastructure**: `preparation`, `training`, `packaging`, `evaluation`. Imports no MLflow | `config`, `data`, `ports`, `scoring` |
+| `cli.py` | `main(family, argv)`: builds the infrastructure, runs `train`, `package <model>` or `evaluate <model>`, writes their result files | `adapters`, `config`, `ports`, `service` |
 | `__main__.py` | `python -m fashion_seg prepare`: the only step without a family | `config`, `service` |
 
 A family package (`families/<name>/src/fashion_seg_<name>/`) holds **all of its model logic**:
@@ -58,8 +61,14 @@ submodules hold the network, dataset, training loop and predictor, and `__main__
 entrypoint. It may import `fashion_seg.config` and `fashion_seg.ports` only (its entrypoint,
 `fashion_seg.cli`), never MLflow nor another family.
 
+Test helpers (a synthetic dataset and its `params.yaml`) are in `packages/fashion-seg-testing`,
+a dev-only dependency, so they never ship with a packaged model. The workflow steps are tested
+with in-memory fakes of the ports (`packages/fashion-seg/tests/test_services.py`), the adapters
+against a temporary MLflow store.
+
 `tests/test_architecture.py` enforces these rules on the source of the library and of every
-family: a new import across layers fails the tests.
+family: a new import across layers, or MLflow outside the adapters and the serving wrapper,
+fails the tests.
 
 ### Design rules
 
@@ -72,8 +81,9 @@ family: a new import across layers fails the tests.
   `ports.py`; a family is duck-typed (a module with the attributes of `ModelFamily`, checked by
   `cli.main`), not a subclass. The library never imports a family nor a framework.
 - **Explicit wiring: inject dependencies in the entrypoint.** Each family's `__main__.py` passes
-  the family to `cli.main`; the service receives the family and the parameters; families receive
-  a `MetricLogger` instead of calling MLflow; the serving wrapper receives `load_predictor`. No
+  the family to `cli.main`, which builds the infrastructure (`Infrastructure`: tracker and model
+  repository) and passes both to the workflow; families receive a `MetricLogger` instead of
+  calling MLflow; the serving wrapper receives `load_predictor`. No
   registry, no lookup by name, no switching environments at run time: the command (DVC stage,
   Makefile) names the environment and the entrypoint.
 - **One uv project per family, with its Python and framework.** A family needing different
@@ -84,9 +94,14 @@ family: a new import across layers fails the tests.
 - **Framework imports stay in their family and load lazily** in the family's `__init__.py`
   (inside `train` / `load_predictor`): a family's two environments each lack one framework.
   `ports.py` doesn't import polars at run time either: a packaged model's serving image has none.
-- **Shared behaviour goes in the service, model logic in the family.** Image selection, MLflow
-  runs, `metrics.json`, packaging and evaluation are written once in `service/`; a family only
-  trains, exports and predicts.
+- **Business logic is separate from infrastructure.** The workflow (`service/`) and pure modules
+  (`data/annotations.py`, `data/split.py`, `scoring.py`, `serving/response.py`) never import MLflow
+  nor write result files; infrastructure lives in `adapters/` (and `data/files.py` for the
+  dataset's files), reached through the ports. A new backend (another tracker or registry) is a
+  new adapter module, wired in `cli.py`; the workflow doesn't change.
+- **Shared behaviour goes in the service, model logic in the family.** Image selection, tracked
+  runs, packaging and evaluation are written once in `service/`; a family only trains, exports
+  and predicts.
 
 ### Rules specific to this repo
 
@@ -126,7 +141,7 @@ family: a new import across layers fails the tests.
 
 1. `families/<name>/pyproject.toml`: package `fashion-seg-<name>` (`src/fashion_seg_<name>/`),
    its Python, its framework, `fashion-seg` by path (editable), `jsonschema`, `pylint` and
-   `pytest` in `dev`; `uv lock --project families/<name>`. Add a `serve/` environment only if
+   `pytest` in `dev` (and `fashion-seg-testing` by path); `uv lock --project families/<name>`. Add a `serve/` environment only if
    serving needs other versions than training.
 2. `src/fashion_seg_<name>/__init__.py` implements `ports.ModelFamily`: `SPEC` (name, serving
    requirements), `Config` (a `config.TrainConfig` subclass with `smoke_overrides`), `train`,
@@ -136,7 +151,7 @@ family: a new import across layers fails the tests.
 3. `params.yaml`: a `train.<name>` section, and a `models.<served name>` entry for its export.
 4. `dvc.yaml`: `train_<name>`, `package_<served name>` and `evaluate_<served name>` stages, each
    `uv run --project families/<name> --locked python -m fashion_seg_<name> ...`.
-5. Tests in `families/<name>/tests` (port, training smoke run with `fashion_seg.testing`,
+5. Tests in `families/<name>/tests` (port, training smoke run with `fashion_seg_testing`,
    predictor, packaging round trip); `make test-<name>` and `train-<name>-smoke` targets, a
    pylint hook, a CI matrix entry, `make install`.
 

@@ -506,6 +506,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "fashion-seg-testing", marker = "python_full_version < '3.12'" },
     { name = "jsonschema", marker = "python_full_version < '3.12'" },
     { name = "pylint", marker = "python_full_version < '3.12'" },
     { name = "pytest", marker = "python_full_version < '3.12'" },
@@ -522,11 +523,23 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "fashion-seg-testing", editable = "../../packages/fashion-seg-testing" },
     { name = "jsonschema", specifier = ">=4.26.0" },
     { name = "pylint", specifier = ">=4.0.9" },
     { name = "pytest", specifier = ">=9.1.1" },
 ]
 train = [{ name = "maskrcnn-matterport", extras = ["train"], url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl" }]
+
+[[package]]
+name = "fashion-seg-testing"
+version = "0.1.0"
+source = { editable = "../../packages/fashion-seg-testing" }
+dependencies = [
+    { name = "fashion-seg", marker = "python_full_version < '3.12'" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "fashion-seg", editable = "../../packages/fashion-seg" }]
 
 [[package]]
 name = "fastapi"

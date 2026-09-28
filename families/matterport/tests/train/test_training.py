@@ -6,8 +6,8 @@ import polars as pl
 
 import fashion_seg_matterport
 from fashion_seg.cli import main
-from fashion_seg.testing import N_CATEGORIES, write_dataset, write_params
 from fashion_seg_matterport.dataset import FashionDataset
+from fashion_seg_testing import N_CATEGORIES, write_dataset, write_params
 
 
 def test_dataset_maps_categories_to_model_classes(tmp_path):

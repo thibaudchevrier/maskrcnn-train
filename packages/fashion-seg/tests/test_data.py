@@ -3,7 +3,7 @@
 import polars as pl
 import pytest
 
-from fashion_seg.data import annotations
+from fashion_seg.data import annotations, files
 from fashion_seg.data.split import split_image_ids
 
 
@@ -52,11 +52,11 @@ def test_load_restricts_to_ids_in_order(tmp_path):
             "rles": [["1 1"], ["1 1"], ["1 1"]],
         }
     )
-    frame.write_parquet(tmp_path / "annotations.parquet")
-    loaded = annotations.load(tmp_path / "annotations.parquet", ["c", "a"])
+    frame.write_parquet(tmp_path / files.ANNOTATIONS_FILE)
+    loaded = files.load_annotations(tmp_path, ["c", "a"])
     assert loaded["image_id"].to_list() == ["c", "a"]
     with pytest.raises(KeyError):
-        annotations.load(tmp_path / "annotations.parquet", ["zz"])
+        files.load_annotations(tmp_path, ["zz"])
 
 
 def test_select_ids_keeps_local_images_then_limits(tmp_path):
@@ -64,5 +64,5 @@ def test_select_ids_keeps_local_images_then_limits(tmp_path):
     for image_id in ("b", "c", "d"):
         (tmp_path / f"{image_id}.jpg").touch()
     ids = ["a", "b", "c", "d"]
-    assert annotations.select_ids(ids, tmp_path, limit=2, local_only=True) == ["b", "c"]
-    assert annotations.select_ids(ids, tmp_path) == ids
+    assert files.select_ids(ids, tmp_path, limit=2, local_only=True) == ["b", "c"]
+    assert files.select_ids(ids, tmp_path) == ids

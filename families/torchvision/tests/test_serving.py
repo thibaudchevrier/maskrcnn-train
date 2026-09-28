@@ -10,10 +10,12 @@ import torch
 from fashion_seg_contract import schema
 
 import fashion_seg_torchvision
+from fashion_seg.adapters import mlflow_models, mlflow_tracking
 from fashion_seg.config import PackagedModel, load_params
+from fashion_seg.ports import Infrastructure
 from fashion_seg.service.packaging import package
-from fashion_seg.serving.pyfunc import encode_image
-from fashion_seg.testing import write_params
+from fashion_seg.serving.response import encode_image
+from fashion_seg_testing import write_params
 from fashion_seg_torchvision.network import build_model
 from fashion_seg_torchvision.predictor import TorchvisionPredictor
 
@@ -55,7 +57,8 @@ def test_packaged_torchvision_model_follows_the_contract(export_dir, tmp_path, m
     params = load_params(write_params(tmp_path, data, train={}))
     model = PackagedModel(family="torchvision", source=export_dir, output_dir=tmp_path / "packaged")
 
-    provenance = package(fashion_seg_torchvision, "tv", model, params)
+    infra = Infrastructure(tracker=mlflow_tracking, repository=mlflow_models)
+    provenance = package(fashion_seg_torchvision, "tv", model, params, infra)
 
     assert provenance["model_family"] == "torchvision"
     requirements = (tmp_path / "packaged" / "requirements.txt").read_text()

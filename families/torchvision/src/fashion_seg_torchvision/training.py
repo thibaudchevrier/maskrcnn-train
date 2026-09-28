@@ -6,8 +6,6 @@ Writes to the directories the service gives (``TrainInputs``):
 - ``checkpoint_dir / "last.pt"``: model, optimizer and schedule after each epoch, to resume.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import math
@@ -15,7 +13,6 @@ import shutil
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import torch
 import torchvision
@@ -23,11 +20,9 @@ from torch.utils.data import DataLoader
 from torchvision.models.detection import MaskRCNN
 
 from fashion_seg.ports import MetricLogger, TrainInputs, TrainResult
+from fashion_seg_torchvision.config import Config
 from fashion_seg_torchvision.dataset import FashionDataset, collate
 from fashion_seg_torchvision.network import ARCHITECTURE, build_model, pick_device
-
-if TYPE_CHECKING:  # the family's package imports this module lazily: no import cycle
-    from fashion_seg_torchvision import Config
 
 logger = logging.getLogger(__name__)
 

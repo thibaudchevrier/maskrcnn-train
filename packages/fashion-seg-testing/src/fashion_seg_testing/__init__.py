@@ -1,4 +1,4 @@
-"""Test helpers shared by the families: a synthetic prepared dataset and its ``params.yaml``.
+"""Test helpers shared by the library and the families: a synthetic dataset and its ``params.yaml``.
 
 End-to-end tests (training smoke runs, packaging) use them instead of the DVC data.
 """

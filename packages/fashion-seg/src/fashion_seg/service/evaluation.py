@@ -1,37 +1,30 @@
 """Evaluate step: score a packaged model on the frozen split (COCO mask and box mAP).
 
-The model is loaded exactly as it is served (MLflow pyfunc), so the score describes the deployed
-artifact, whatever its family. Results go to:
+The ``ModelRepository`` loads the model exactly as it is served, so the score describes the
+deployed artifact, whatever its family. The results are recorded by the ``Tracker`` (a run with
+the metrics and the per-class AP table) and, for a whole-split score, as ``<split>_*`` tags on the
+registered model version. The command line writes them to ``metrics/evaluate-<model>.json`` too,
+for ``dvc metrics show`` / ``dvc metrics diff``.
 
-- MLflow: a run in the evaluation experiment (metrics, per-class AP table), and ``<split>_*``
-  tags on the registered model version (whole split only);
-- ``metrics/evaluate-<model>.json``, for ``dvc metrics show`` / ``dvc metrics diff``.
-
-Run through DVC (``uv run dvc repro --single-item evaluate@legacy``) on the whole split, or quickly
+Run through DVC (``uv run dvc repro --single-item evaluate_legacy``) on the whole split, or quickly
 on a subset with ``make evaluate-quick MODEL=legacy``.
 """
 
-import json
 import logging
 import re
-import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
-import mlflow
-import mlflow.pyfunc
-import pandas as pd
 import polars as pl
-from fashion_seg_contract import request
 from fashion_seg_contract.labels import load_class_names
 from fashion_seg_contract.schema import Prediction
 
 from fashion_seg import scoring
 from fashion_seg.config import DataConfig, EvaluateConfig, PackagedModel, Params
-from fashion_seg.data import annotations
-from fashion_seg.tracking import setup_experiment
+from fashion_seg.data import files
+from fashion_seg.ports import Infrastructure, Tracker
 
 logger = logging.getLogger(__name__)
 
@@ -40,14 +33,14 @@ VERSION_TAGS = ("mask_map", "mask_ap50", "box_map", "n_images")
 
 
 def predict_images(
-    model: mlflow.pyfunc.PyFuncModel, paths: list[Path], min_score: float
+    predict: Callable[[bytes, float], Prediction], paths: list[Path], min_score: float
 ) -> Iterator[Prediction]:
-    """Run the packaged model on images, one request per image, as serving does.
+    """Run the packaged model on image files, one request per image, as serving does.
 
     Parameters
     ----------
-    model : mlflow.pyfunc.PyFuncModel
-        The packaged model.
+    predict : Callable[[bytes, float], Prediction]
+        The loaded model (``ModelRepository.load``).
     paths : list[Path]
         Image files.
     min_score : float
@@ -59,12 +52,11 @@ def predict_images(
         The model's response for each image, in order.
     """
     for path in paths:
-        rows = pd.DataFrame({request.IMAGE_FIELD: [request.encode_image(path.read_bytes())]})
-        yield model.predict(rows, params={request.MIN_SCORE_PARAM: min_score})[0]
+        yield predict(path.read_bytes(), min_score)
 
 
 def slug(label: str) -> str:
-    """Turn a class label into an MLflow metric name fragment.
+    """Turn a class label into a metric name fragment.
 
     Parameters
     ----------
@@ -104,83 +96,118 @@ def select_images(data: DataConfig, config: EvaluateConfig) -> pl.DataFrame:
     SystemExit
         If none of the split's images is on disk.
     """
-    split = annotations.load_split(data.prepared_dir / annotations.SPLIT_FILE)[config.split]
-    present = annotations.select_ids(split, data.train_images, local_only=True)
+    split = files.load_split(data.prepared_dir)[config.split]
+    present = files.select_ids(split, data.train_images, local_only=True)
     if len(present) < len(split):
         logger.warning(
             "%d of %d %s images are not pulled", len(split) - len(present), len(split), config.split
         )
-    selected = annotations.select_ids(present, data.train_images, config.max_images)
+    selected = files.select_ids(present, data.train_images, config.max_images)
     if not selected:
         raise SystemExit(f"No {config.split} image in {data.train_images}: run `make pull-val`.")
-    return annotations.load(data.prepared_dir / annotations.ANNOTATIONS_FILE, selected)
+    return files.load_annotations(data.prepared_dir, selected)
 
 
-def log_run(
-    experiment: str,
-    run_name: str,
-    run_params: dict[str, Any],
-    metrics: dict[str, float],
-    per_class: pl.DataFrame,
-) -> None:
-    """Log an evaluation run: parameters, metrics, per-class AP and the per-class table.
+def log_scores(tracker: Tracker, metrics: dict[str, float], per_class: pl.DataFrame) -> None:
+    """Record the scores in the current run: metrics, per-class mask AP, the per-class table.
 
     Parameters
     ----------
-    experiment : str
-        MLflow experiment.
-    run_name : str
-        Run name.
-    run_params : dict[str, Any]
-        Run parameters; ``registered_name``, ``registered_version`` and ``model_family`` are
-        logged as tags.
+    tracker : Tracker
+        Records the run.
     metrics : dict[str, float]
         Metrics from ``scoring.score``.
     per_class : pl.DataFrame
         Per-class table from ``scoring.score``.
     """
-    tag_keys = ("registered_name", "registered_version", "model_family")
-    setup_experiment(experiment)
-    with mlflow.start_run(run_name=run_name):
-        mlflow.set_tags({k: str(run_params[k]) for k in tag_keys})
-        mlflow.log_params({k: v for k, v in run_params.items() if k not in tag_keys})
-        mlflow.log_metrics(metrics)
-        for row in per_class.iter_rows(named=True):
-            if row["mask_ap"] == row["mask_ap"]:  # skip NaN: no ground truth for the class
-                mlflow.log_metric(f"mask_ap/{slug(row['label'])}", row["mask_ap"])
-        with tempfile.TemporaryDirectory() as tmp:
-            table = Path(tmp) / "per_class.csv"
-            per_class.write_csv(table)
-            mlflow.log_artifact(str(table))
+    tracker.log_metrics(metrics)
+    tracker.log_metrics(
+        {
+            f"mask_ap/{slug(row['label'])}": row["mask_ap"]
+            for row in per_class.iter_rows(named=True)
+            if row["mask_ap"] == row["mask_ap"]  # skip NaN: no ground truth for the class
+        }
+    )
+    tracker.log_table(per_class, "per_class.csv")
 
 
-def tag_version(provenance: dict[str, Any], split: str, metrics: dict[str, float]) -> None:
-    """Copy the main metrics to the registered model version as ``<split>_<metric>`` tags.
+def score_model(
+    predict: Callable[[bytes, float], Prediction],
+    records: pl.DataFrame,
+    data: DataConfig,
+    min_score: float,
+) -> tuple[dict[str, float], pl.DataFrame]:
+    """Predict the selected images and score the predictions.
 
     Parameters
     ----------
-    provenance : dict[str, Any]
-        The packaged model's ``provenance.json`` (registered name and version).
-    split : str
-        Evaluated split.
-    metrics : dict[str, float]
-        Metrics from ``scoring.score``.
+    predict : Callable[[bytes, float], Prediction]
+        The loaded model (``ModelRepository.load``).
+    records : pl.DataFrame
+        Prepared annotations of the selected images.
+    data : DataConfig
+        Dataset files (images, labels).
+    min_score : float
+        ``min_score`` request parameter.
+
+    Returns
+    -------
+    tuple[dict[str, float], pl.DataFrame]
+        Metrics from ``scoring.score`` plus ``seconds_per_image``, and the per-class table.
     """
-    client = mlflow.MlflowClient()
-    name, version = provenance["registered_name"], str(provenance["registered_version"])
-    for key in VERSION_TAGS:
-        client.set_model_version_tag(name, version, f"{split}_{key}", metrics[key])
+    paths = [data.train_images / f"{i}.jpg" for i in records["image_id"]]
+    start = time.monotonic()
+    metrics, per_class = scoring.score(
+        records, predict_images(predict, paths, min_score), load_class_names(data.label_file)
+    )
+    metrics["seconds_per_image"] = (time.monotonic() - start) / max(1, records.height)
+    return metrics, per_class
+
+
+def run_details(
+    name: str, model: PackagedModel, provenance: dict[str, Any], config: EvaluateConfig
+) -> tuple[str, dict[str, str], dict[str, Any]]:
+    """Name, tags and parameters of the evaluation run.
+
+    Parameters
+    ----------
+    name : str
+        Name of the served model.
+    model : PackagedModel
+        The served model.
+    provenance : dict[str, Any]
+        Its provenance (registered name and version, family, model URI).
+    config : EvaluateConfig
+        Evaluation settings.
+
+    Returns
+    -------
+    tuple[str, dict[str, str], dict[str, Any]]
+        Run name (``<model>-v<version>-<split>``), tags and parameters.
+    """
+    version = str(provenance["registered_version"])
+    tags = {
+        "registered_name": provenance["registered_name"],
+        "registered_version": version,
+        "model_family": provenance["model_family"],
+    }
+    run_params = {
+        "model": name,
+        "model_dir": str(model.output_dir),
+        "model_uri": provenance["model_uri"],
+        **config.model_dump(mode="json", exclude={"output_dir"}),
+    }
+    return f"{name}-v{version}-{config.split}", tags, run_params
 
 
 def evaluate(
     name: str,
     model: PackagedModel,
     params: Params,
-    *,
+    infra: Infrastructure,
     max_images: int | None = None,
-    output: Path | None = None,
 ) -> dict[str, float]:
-    """Score a packaged model, log the results and write the metrics file.
+    """Score a packaged model and record the results.
 
     Parameters
     ----------
@@ -190,11 +217,11 @@ def evaluate(
         The served model (its ``output_dir`` holds the packaged model).
     params : Params
         The pipeline parameters (data, evaluation settings, tracking).
+    infra : Infrastructure
+        The repository loads the model and tags its version; the tracker records the run.
     max_images : int | None
         Override ``evaluate.max_images``; a subset score is not copied to the registry.
         By default ``None``.
-    output : Path | None
-        Metrics file. By default ``None``: ``<evaluate.output_dir>/evaluate-<name>.json``.
 
     Returns
     -------
@@ -204,32 +231,21 @@ def evaluate(
     config = params.evaluate
     if max_images is not None:
         config = config.model_copy(update={"max_images": max_images})
-    provenance = json.loads((model.output_dir / "provenance.json").read_text(encoding="utf-8"))
+    provenance = infra.repository.provenance(model.output_dir)
     records = select_images(params.data, config)
     logger.info("Evaluating %s on %d images", model.output_dir, records.height)
-
-    pyfunc_model = mlflow.pyfunc.load_model(str(model.output_dir))
-    paths = [params.data.train_images / f"{i}.jpg" for i in records["image_id"]]
-    start = time.monotonic()
-    metrics, per_class = scoring.score(
-        records,
-        predict_images(pyfunc_model, paths, config.min_score),
-        load_class_names(params.data.label_file),
+    metrics, per_class = score_model(
+        infra.repository.load(model.output_dir), records, params.data, config.min_score
     )
-    metrics["seconds_per_image"] = (time.monotonic() - start) / max(1, records.height)
 
-    run_params = {
-        **provenance,
-        "model": name,
-        "model_dir": str(model.output_dir),
-        **config.model_dump(mode="json", exclude={"output_dir"}),
-    }
-    run_name = f"{name}-v{provenance['registered_version']}-{config.split}"
-    log_run(params.tracking.evaluation_experiment, run_name, run_params, metrics, per_class)
+    run_name, tags, run_params = run_details(name, model, provenance, config)
+    with infra.tracker.run(params.tracking.evaluation_experiment, run_name, tags):
+        infra.tracker.log_params(run_params)
+        log_scores(infra.tracker, metrics, per_class)
     if not config.max_images:  # a subset score must not look like the version's score
-        tag_version(provenance, config.split, metrics)
-
-    output = output or config.output_dir / f"evaluate-{name}.json"
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
+        infra.repository.tag_version(
+            tags["registered_name"],
+            tags["registered_version"],
+            {f"{config.split}_{key}": str(metrics[key]) for key in VERSION_TAGS},
+        )
     return metrics

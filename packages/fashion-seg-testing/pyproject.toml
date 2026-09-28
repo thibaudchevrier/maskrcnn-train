@@ -1,0 +1,18 @@
+# Test helpers shared by the library's and the families' tests (dev dependency only): a synthetic
+# prepared dataset and its params.yaml. Kept out of fashion-seg so it never ships with a model.
+[project]
+name = "fashion-seg-testing"
+version = "0.1.0"
+description = "Test helpers of fashion-seg-train: synthetic dataset and parameters"
+requires-python = ">=3.11,<3.13"
+dependencies = ["fashion-seg"]
+
+[tool.uv.sources]
+fashion-seg = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fashion_seg_testing"]

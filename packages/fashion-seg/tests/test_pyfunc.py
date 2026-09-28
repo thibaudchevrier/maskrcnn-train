@@ -11,7 +11,8 @@ from fashion_seg_contract import rle, schema
 from PIL import Image
 
 from fashion_seg.ports import Detections
-from fashion_seg.serving.pyfunc import FashionSegmentationModel, decode_image, encode_image
+from fashion_seg.serving.pyfunc import FashionSegmentationModel
+from fashion_seg.serving.response import decode_image, encode_image
 
 CLASS_NAMES = ["BG", "shirt", "pants"]
 

@@ -9,7 +9,8 @@ from fashion_seg_contract import schema
 
 import fashion_seg_matterport
 from fashion_seg.ports import ModelFamily
-from fashion_seg.serving.pyfunc import FashionSegmentationModel, encode_image
+from fashion_seg.serving.pyfunc import FashionSegmentationModel
+from fashion_seg.serving.response import encode_image
 
 # The 2021 model, pulled with `uv run dvc pull deployement.dvc` at the repository root.
 SAVED_MODEL = Path(

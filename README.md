@@ -94,10 +94,11 @@ uv run --project families/matterport/serve python -m fashion_seg_matterport eval
 
 | Module | Role |
 |--------|------|
-| `fashion_seg.ports` | The interfaces: `ModelFamily` (what a family provides), `Predictor`, `MetricLogger`, and the types they exchange |
-| `fashion_seg.service` | The workflow steps, identical for every family: `preparation`, `training`, `packaging`, `evaluation` |
-| `fashion_seg.cli` | `main(family)`: the generic command line (`train`, `package`, `evaluate`) |
-| `fashion_seg.config`, `.data`, `.scoring`, `.tracking`, `.serving` | Parameters (pydantic), dataset logic, COCO mAP, MLflow setup, the MLflow serving wrapper: independent building blocks |
+| `fashion_seg.ports` | The interfaces: `ModelFamily` (what a family provides), `Tracker` and `ModelRepository` (experiment tracking and model registry), `Predictor`, `MetricLogger`, and the types they exchange |
+| `fashion_seg.service` | The workflow steps, identical for every family and independent of MLflow: `preparation`, `training`, `packaging`, `evaluation` |
+| `fashion_seg.adapters` | The infrastructure behind the ports: `mlflow_tracking`, `mlflow_models` |
+| `fashion_seg.cli` | `main(family)`: the generic command line (`train`, `package`, `evaluate`); wires the family, the MLflow adapters and the workflow |
+| `fashion_seg.config`, `.data`, `.scoring`, `.serving` | Parameters (pydantic), dataset logic and files, COCO mAP, the serving response and MLflow wrapper: independent building blocks |
 | `fashion_seg_<family>` | One model family: `SPEC` (serving requirements), `Config` (its `params.yaml` section), `train`, `load_predictor`, `describe`; network, dataset, training loop and predictor in submodules; `__main__` its entrypoint |
 
 The command (DVC stage or Makefile target) names the environment and the entrypoint: nothing is

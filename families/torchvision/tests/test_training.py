@@ -8,7 +8,7 @@ import pytest
 import fashion_seg_torchvision
 from fashion_seg.cli import main
 from fashion_seg.ports import ModelFamily
-from fashion_seg.testing import write_dataset, write_params
+from fashion_seg_testing import write_dataset, write_params
 from fashion_seg_torchvision.dataset import FashionDataset
 
 

@@ -10,6 +10,7 @@ resolution-markers = [
 [manifest]
 members = [
     "fashion-seg",
+    "fashion-seg-testing",
     "fashion-seg-train",
 ]
 
@@ -843,6 +844,17 @@ requires-dist = [
 provides-extras = ["validate"]
 
 [[package]]
+name = "fashion-seg-testing"
+version = "0.1.0"
+source = { editable = "packages/fashion-seg-testing" }
+dependencies = [
+    { name = "fashion-seg" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "fashion-seg", editable = "packages/fashion-seg" }]
+
+[[package]]
 name = "fashion-seg-train"
 version = "0.4.1"
 source = { virtual = "." }
@@ -854,6 +866,7 @@ dependencies = [
 dev = [
     { name = "commitizen" },
     { name = "dvc", extra = ["gdrive"] },
+    { name = "fashion-seg-testing" },
     { name = "jsonschema" },
     { name = "pre-commit" },
     { name = "pydoclint" },
@@ -870,6 +883,7 @@ requires-dist = [{ name = "fashion-seg", editable = "packages/fashion-seg" }]
 dev = [
     { name = "commitizen", specifier = ">=4.19" },
     { name = "dvc", extras = ["gdrive"], specifier = ">=3.59" },
+    { name = "fashion-seg-testing", editable = "packages/fashion-seg-testing" },
     { name = "jsonschema", specifier = ">=4.26.0" },
     { name = "pre-commit", specifier = ">=4" },
     { name = "pydoclint", specifier = ">=0.10.0" },

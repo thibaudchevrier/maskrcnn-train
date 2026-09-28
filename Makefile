@@ -60,12 +60,12 @@ prepare:
 
 # A few train/val images for smoke runs, without pulling the whole 23.7 GB dataset.
 pull-sample:
-	uv run python -c "from fashion_seg.data.annotations import load_split as s; d = s('prepared/split.json'); n = $(SAMPLE_IMAGES); print('\n'.join(f'data/imaterialist/train/{i}.jpg' for i in d['train'][:n] + d['val'][:max(2, n // 4)]))" | xargs uv run dvc pull
+	uv run python -c "from fashion_seg.data.files import load_split as s; d = s('prepared'); n = $(SAMPLE_IMAGES); print('\n'.join(f'data/imaterialist/train/{i}.jpg' for i in d['train'][:n] + d['val'][:max(2, n // 4)]))" | xargs uv run dvc pull
 
 # Validation images (~3 GB for the 5,703 of the split; VAL_IMAGES=200 for a subset).
 VAL_IMAGES ?=
 pull-val:
-	uv run python -c "from fashion_seg.data.annotations import load_split as s; ids = s('prepared/split.json')['val']; n = '$(VAL_IMAGES)'; ids = ids[:int(n)] if n else ids; print('\n'.join(f'data/imaterialist/train/{i}.jpg' for i in ids))" | xargs -n 500 uv run dvc pull
+	uv run python -c "from fashion_seg.data.files import load_split as s; ids = s('prepared')['val']; n = '$(VAL_IMAGES)'; ids = ids[:int(n)] if n else ids; print('\n'.join(f'data/imaterialist/train/{i}.jpg' for i in ids))" | xargs -n 500 uv run dvc pull
 
 # Tiny runs on the pulled images: check data, training, checkpointing, MLflow logging and export.
 train-torchvision-smoke:

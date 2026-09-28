@@ -15,17 +15,21 @@ which gives, in the family's environment::
     python -m fashion_seg_<family> package <model>                  # a key of params.yaml:models
     python -m fashion_seg_<family> evaluate <model> [--max-images N] [--output FILE]
 
-``main`` wires the family, the parameters and the workflow steps (``fashion_seg.service``) and
-knows no family by name.
+``main`` is the composition root: it wires the injected family, the parameters, the
+infrastructure (the MLflow adapters) and the workflow steps (``fashion_seg.service``), and writes
+their results to files. It knows no family by name.
 """
 
 import argparse
+import json
 import logging
 import sys
 from pathlib import Path
+from typing import Any
 
+from fashion_seg.adapters import mlflow_models, mlflow_tracking
 from fashion_seg.config import PackagedModel, Params, load_params
-from fashion_seg.ports import ModelFamily
+from fashion_seg.ports import Infrastructure, ModelFamily
 from fashion_seg.service import evaluation, packaging, training
 
 logger = logging.getLogger("fashion_seg")
@@ -89,6 +93,62 @@ def served_model(family: ModelFamily, params: Params, name: str) -> PackagedMode
     return params.models[name]
 
 
+def write_json(path: Path, content: dict[str, Any]) -> None:
+    """Write a result file (DVC metrics), creating its directory.
+
+    Parameters
+    ----------
+    path : Path
+        File to write.
+    content : dict[str, Any]
+        JSON-serializable content.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
+
+
+def run_command(family: ModelFamily, args: argparse.Namespace, params: Params) -> None:
+    """Run one command, with the MLflow infrastructure.
+
+    Parameters
+    ----------
+    family : ModelFamily
+        The model family.
+    args : argparse.Namespace
+        Parsed command line.
+    params : Params
+        The pipeline parameters.
+    """
+    infra = Infrastructure(tracker=mlflow_tracking, repository=mlflow_models)
+    name = family.SPEC.name
+    if args.command == "train":
+        config = family.Config.model_validate(params.train[name])
+        result = training.train(family, config, params, infra.tracker, smoke=args.smoke)
+        write_json(training.output_dir_of(config, args.smoke) / "metrics.json", result.metrics)
+        logger.info("Trained %s: %s", name, result.metrics)
+    elif args.command == "package":
+        model = served_model(family, params, args.model)
+        provenance = packaging.package(family, args.model, model, params, infra)
+        logger.info(
+            "Registered %s v%s; saved to %s",
+            provenance["registered_name"],
+            provenance["registered_version"],
+            model.output_dir,
+        )
+    else:
+        model = served_model(family, params, args.model)
+        metrics = evaluation.evaluate(args.model, model, params, infra, args.max_images)
+        write_json(
+            args.output or params.evaluate.output_dir / f"evaluate-{args.model}.json", metrics
+        )
+        logger.info(
+            "mask mAP %.4f | box mAP %.4f | %d images",
+            metrics["mask_map"],
+            metrics["box_map"],
+            metrics["n_images"],
+        )
+
+
 def main(family: ModelFamily, argv: list[str] | None = None) -> None:
     """Run a command of the workflow with the given family.
 
@@ -108,30 +168,4 @@ def main(family: ModelFamily, argv: list[str] | None = None) -> None:
         raise TypeError(f"{family!r} does not implement fashion_seg.ports.ModelFamily")
     args = build_parser(family).parse_args(sys.argv[1:] if argv is None else argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    params = load_params(args.params)
-    name = family.SPEC.name
-
-    if args.command == "train":
-        config = family.Config.model_validate(params.train[name])
-        result = training.train(family, config, params, smoke=args.smoke)
-        logger.info("Trained %s: %s", name, result.metrics)
-    elif args.command == "package":
-        model = served_model(family, params, args.model)
-        provenance = packaging.package(family, args.model, model, params)
-        logger.info(
-            "Registered %s v%s; saved to %s",
-            provenance["registered_name"],
-            provenance["registered_version"],
-            model.output_dir,
-        )
-    else:
-        model = served_model(family, params, args.model)
-        metrics = evaluation.evaluate(
-            args.model, model, params, max_images=args.max_images, output=args.output
-        )
-        logger.info(
-            "mask mAP %.4f | box mAP %.4f | %d images",
-            metrics["mask_map"],
-            metrics["box_map"],
-            metrics["n_images"],
-        )
+    run_command(family, args, load_params(args.params))
