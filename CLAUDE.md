@@ -34,7 +34,9 @@ Released packages used here: `fashion-seg-contract` (response schema, RLE, label
   `Detections` (`predictors/base.py`). Never log a raw framework flavor (`mlflow.pytorch`...) for
   serving: fashion-serving only understands the contract.
 - **Every model trains and is evaluated on the same data**: `prepared/annotations.parquet` and
-  `prepared/split.json`, read with `fashion_seg_core.annotations`.
+  `prepared/split.json`, read with `fashion_seg_core.annotations`. Models are compared with the
+  `evaluate` stage only (COCO mAP of the packaged model on the val split), never with training
+  losses.
 - **MLflow**: training runs go to the `fashion-seg-training` experiment with a `model_family` tag.
   Every environment pins the same MLflow minor version (they share `mlflow.db`).
 - **Shared code**: training-side helpers go in `packages/core`; anything about the model's response
@@ -65,6 +67,9 @@ make prepare                  # dvc repro --single-item prepare
 make pull-sample              # a few images for smoke runs
 make train-matterport-smoke   # tiny training run on the pulled images
 make mlflow-ui                # http://localhost:5002
+make pull-val                 # validation images (VAL_IMAGES=200 for a subset)
+make evaluate-quick           # score the packaged model on 200 val images (not DVC-tracked)
+uv run dvc repro --single-item evaluate          # score it on the whole split
 uv run dvc repro --single-item package_legacy   # re-package the served model
 ```
 

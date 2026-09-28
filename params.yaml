@@ -31,6 +31,15 @@ train_matterport:
   max_val_images: null
   detection_min_confidence: 0.7
 
+# Scores the packaged model (models/<name>) on the frozen split, as it is served.
+evaluate:
+  model_dir: models/fashion-maskrcnn
+  split: val
+  max_images: null        # null = the whole split (5,703 images, ~1.5 h on CPU)
+  min_score: 0.0          # request parameter; the 2021 model still drops < 0.7 in its graph
+  experiment: fashion-seg-evaluation
+  output: metrics/evaluate.json
+
 legacy_model:
   saved_model_dir: deployement
   label_file: data/imaterialist/label_descriptions.json

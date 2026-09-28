@@ -4,7 +4,7 @@ MATTERPORT = uv run --project trainers/matterport
 MLFLOW_PORT ?= 5002
 SAMPLE_IMAGES ?= 12
 
-.PHONY: install hooks format lint test check mlflow-ui prepare pull-sample train-matterport-smoke
+.PHONY: install hooks format lint test check mlflow-ui prepare pull-sample pull-val train-matterport-smoke evaluate-quick
 
 install:
 	uv sync --locked
@@ -37,6 +37,15 @@ prepare:
 # A few train/val images for smoke runs, without pulling the whole 23.7 GB dataset.
 pull-sample:
 	uv run python -c "from fashion_seg_core.annotations import load_split as s; d = s('prepared/split.json'); n = $(SAMPLE_IMAGES); print('\n'.join(f'data/imaterialist/train/{i}.jpg' for i in d['train'][:n] + d['val'][:max(2, n // 4)]))" | xargs uv run dvc pull
+
+# Validation images (~3 GB for the 5,703 of the split; VAL_IMAGES=200 for a subset).
+VAL_IMAGES ?=
+pull-val:
+	uv run python -c "from fashion_seg_core.annotations import load_split as s; ids = s('prepared/split.json')['val']; n = '$(VAL_IMAGES)'; ids = ids[:int(n)] if n else ids; print('\n'.join(f'data/imaterialist/train/{i}.jpg' for i in ids))" | xargs -n 500 uv run dvc pull
+
+# Score the packaged model on the first 200 pulled val images (not tracked by DVC, no registry tags).
+evaluate-quick:
+	TF_CPP_MIN_LOG_LEVEL=3 uv run python -m fashion_seg.evaluate --max-images 200 --output metrics/evaluate-quick.json
 
 # Tiny Matterport run on the pulled images: checks data, training, MLflow logging and export.
 train-matterport-smoke:
