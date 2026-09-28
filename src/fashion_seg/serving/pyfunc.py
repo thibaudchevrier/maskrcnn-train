@@ -16,6 +16,7 @@ relative to the image after EXIF orientation is applied.
 
 import base64
 import io
+from pathlib import Path
 from typing import Any
 
 import mlflow.pyfunc
@@ -26,7 +27,8 @@ from fashion_seg_contract.labels import load_class_names
 from fashion_seg_contract.schema import Instance, Prediction
 from PIL import Image, ImageOps
 
-from fashion_seg.predictors.base import Detections, Predictor
+from fashion_seg import registry
+from fashion_seg.ports import Detections, Predictor
 
 IMAGE_COLUMN = "image"
 DEFAULT_MIN_SCORE = 0.7
@@ -108,14 +110,15 @@ def format_detections(
 
 
 def load_predictor(family: str, model_dir: str) -> Predictor:
-    """Load the predictor of a model family, importing only that family's framework.
+    """Load an export with its family's predictor, importing only that family's framework.
 
-    A packaged model's environment only has its own framework (TensorFlow or PyTorch).
+    A packaged model's environment only has its own framework (TensorFlow or PyTorch). Unknown
+    families raise the registry's ``ValueError``.
 
     Parameters
     ----------
     family : str
-        ``"matterport"`` or ``"torchvision"``.
+        Model family, e.g. ``"matterport"`` or ``"torchvision"``.
     model_dir : str
         The model's export directory.
 
@@ -123,22 +126,8 @@ def load_predictor(family: str, model_dir: str) -> Predictor:
     -------
     Predictor
         The loaded predictor.
-
-    Raises
-    ------
-    ValueError
-        If the family is unknown.
     """
-    # pylint: disable=import-outside-toplevel  # each family imports its own framework, lazily
-    if family == "matterport":
-        from fashion_seg.predictors.matterport import MatterportPredictor
-
-        return MatterportPredictor(model_dir)
-    if family == "torchvision":
-        from fashion_seg.predictors.torchvision import TorchvisionPredictor
-
-        return TorchvisionPredictor(model_dir)
-    raise ValueError(f"Unknown predictor family {family!r}: expected matterport or torchvision")
+    return registry.get_family(family).load_predictor(Path(model_dir))
 
 
 # pylint: disable-next=abstract-method  # predict_stream is optional: this model doesn't stream

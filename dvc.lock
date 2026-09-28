@@ -45,20 +45,21 @@ stages:
             url: 
               https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl
   prepare:
-    cmd: python -m fashion_seg.prepare
+    cmd: python -m fashion_seg prepare
     deps:
     - path: data/imaterialist/train.csv
       hash: md5
       md5: 7eaec314eed2d95c363ecb81f4475bb6
       size: 1437924420
-    - path: packages/core/src/fashion_seg_core/annotations.py
+    - path: src/fashion_seg/data
       hash: md5
-      md5: af3440e26ad226782e80c4d0dc6e8de5
-      size: 2957
-    - path: src/fashion_seg/prepare.py
+      md5: e29740bfd07484dd4a8f5f930c6d4f1f.dir
+      size: 5740
+      nfiles: 3
+    - path: src/fashion_seg/service/preparation.py
       hash: md5
-      md5: 7cfa63fb664dd84ca1f39c0965598122
-      size: 2910
+      md5: f461e5925c78bb049407a994e455f7b3
+      size: 1619
     params:
       params.yaml:
         data.prepared_dir: prepared
@@ -73,3 +74,48 @@ stages:
       md5: d3b65f71823b250f9188c1ab309085c4.dir
       size: 587736028
       nfiles: 2
+  package@legacy:
+    cmd: python -m fashion_seg package legacy
+    deps:
+    - path: data/imaterialist/label_descriptions.json
+      hash: md5
+      md5: d8479cd45c24bbd73285daa5a924777d
+      size: 39023
+    - path: deployement
+      hash: md5
+      md5: d94d8cc1b1efbccb059ae08f6b077148.dir
+      size: 265710485
+      nfiles: 4
+    - path: src/fashion_seg
+      hash: md5
+      md5: fe99c063f26c0a72662436fa829878db.dir
+      size: 107613
+      nfiles: 28
+    params:
+      params.yaml:
+        models.legacy:
+          family: matterport
+          source: deployement
+          output_dir: models/fashion-maskrcnn
+        tracking.packaging_experiment: fashion-maskrcnn
+        tracking.registered_name: fashion-maskrcnn
+      pyproject.toml:
+        tool.uv.sources:
+          torch:
+          - index: pytorch-cpu
+            marker: sys_platform == 'linux'
+          torchvision:
+          - index: pytorch-cpu
+            marker: sys_platform == 'linux'
+          fashion-seg-contract:
+            url: 
+              https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl
+          maskrcnn-matterport:
+            url: 
+              https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl
+    outs:
+    - path: models/fashion-maskrcnn
+      hash: md5
+      md5: 47b3dc51267706bf373f53e5d9cede8f.dir
+      size: 266359681
+      nfiles: 44

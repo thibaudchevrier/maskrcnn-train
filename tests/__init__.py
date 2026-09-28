@@ -1,1 +1,1 @@
-"""Tests of the orchestration environment (prepare stage, serving wrapper)."""
+"""Tests of the root environment: data, scoring, serving, families, architecture."""

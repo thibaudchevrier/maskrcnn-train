@@ -10,7 +10,7 @@ import pytest
 from fashion_seg_contract import rle, schema
 from PIL import Image
 
-from fashion_seg.predictors.base import Detections
+from fashion_seg.ports import Detections
 from fashion_seg.serving.pyfunc import FashionSegmentationModel, decode_image, encode_image
 
 CLASS_NAMES = ["BG", "shirt", "pants"]
@@ -34,7 +34,6 @@ class FakePredictor:
 
 
 def _request(image: np.ndarray) -> dict[str, list[str]]:
-    # Same column access as the pandas DataFrame MLflow passes when serving.
     """Build a request with one image, as MLflow passes it (column access only)."""
     return {"image": [encode_image(image)]}
 
@@ -70,7 +69,7 @@ SAVED_MODEL = Path(os.environ.get("FASHION_SEG_SAVED_MODEL", "deployement"))
 def test_real_saved_model_runs():
     """The 2021 model (deployement/) runs end to end and follows the contract."""
     # pylint: disable-next=import-outside-toplevel  # TensorFlow loads only when the model is pulled
-    from fashion_seg.predictors.matterport import MatterportPredictor
+    from fashion_seg.families.matterport.predictor import MatterportPredictor
 
     model = FashionSegmentationModel(MatterportPredictor(SAVED_MODEL), ["BG"] + ["c"] * 46)
     image = np.random.default_rng(0).integers(0, 255, (300, 200, 3), dtype=np.uint8)

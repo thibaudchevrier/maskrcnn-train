@@ -1,10 +1,12 @@
+# Every stage runs `python -m fashion_seg <command>` (src/fashion_seg/__main__.py).
+# Code dependencies: the workflow step (service/), the modules it uses, and the family's code.
 stages:
   prepare:
-    cmd: python -m fashion_seg.prepare
+    cmd: python -m fashion_seg prepare
     deps:
       - ${data.train_csv}
-      - src/fashion_seg/prepare.py
-      - packages/core/src/fashion_seg_core/annotations.py
+      - src/fashion_seg/service/preparation.py
+      - src/fashion_seg/data
     params:
       - data.train_csv
       - data.prepared_dir
@@ -12,86 +14,84 @@ stages:
     outs:
       - ${data.prepared_dir}
 
+  # Runs itself in envs/matterport (Python 3.11, TensorFlow 2.15).
   train_matterport:
-    cmd: uv run --project trainers/matterport --locked python -m fashion_seg_matterport.train
+    cmd: python -m fashion_seg train matterport
     deps:
       - ${data.prepared_dir}
       - ${data.train_images}
       - ${data.label_file}
-      - ${train_matterport.init_weights}
-      - trainers/matterport/src
-      - trainers/matterport/uv.lock
-      - packages/core/src/fashion_seg_core
+      - ${train.matterport.init_weights}
+      - src/fashion_seg/families/matterport
+      - src/fashion_seg/service/training.py
+      - src/fashion_seg/data
+      - envs/matterport/uv.lock
     params:
       - data
       - split
-      - train_matterport
+      - train.matterport
     outs:
-      - ${train_matterport.output_dir}/model
+      - ${train.matterport.output_dir}/model
     metrics:
-      - ${train_matterport.output_dir}/metrics.json:
+      - ${train.matterport.output_dir}/metrics.json:
           cache: false
-
-  package_legacy:
-    cmd: python -m fashion_seg.package legacy_model
-    deps:
-      - ${legacy_model.model_dir}
-      - ${legacy_model.label_file}
-      - src/fashion_seg
-    params:
-      - legacy_model
-      # Pinned wheels of fashion-seg-contract / maskrcnn-matterport: the model's requirements.
-      - pyproject.toml:
-          - tool.uv.sources
 
   train_torchvision:
-    cmd: python -m fashion_seg_torchvision.train
+    cmd: python -m fashion_seg train torchvision
     deps:
       - ${data.prepared_dir}
       - ${data.train_images}
       - ${data.label_file}
-      - ${train_torchvision.init_weights}
-      - trainers/torchvision/src
-      - packages/core/src/fashion_seg_core
+      - ${train.torchvision.init_weights}
+      - src/fashion_seg/families/torchvision
+      - src/fashion_seg/service/training.py
+      - src/fashion_seg/data
     params:
       - data
       - split
-      - train_torchvision
+      - train.torchvision
     outs:
-      - ${train_torchvision.output_dir}/model
+      - ${train.torchvision.output_dir}/model
     metrics:
-      - ${train_torchvision.output_dir}/metrics.json:
+      - ${train.torchvision.output_dir}/metrics.json:
           cache: false
 
-  package_torchvision:
-    cmd: python -m fashion_seg.package torchvision_model
-    deps:
-      - ${torchvision_model.model_dir}
-      - ${torchvision_model.label_file}
-      - src/fashion_seg
-      - trainers/torchvision/src/fashion_seg_torchvision/model.py
-    params:
-      - torchvision_model
-      - pyproject.toml:
-          - tool.uv.sources
-    outs:
-      - ${torchvision_model.output_dir}
+  # The packaged model bundles all of src/fashion_seg: any code change re-packages it.
+  package:
+    foreach: ${models}
+    do:
+      cmd: python -m fashion_seg package ${key}
+      deps:
+        - ${item.source}
+        - ${data.label_file}
+        - src/fashion_seg
+      params:
+        - models.${key}
+        - tracking.packaging_experiment
+        - tracking.registered_name
+        # Pinned wheels of fashion-seg-contract / maskrcnn-matterport: the model's requirements.
+        - pyproject.toml:
+            - tool.uv.sources
+      outs:
+        - ${item.output_dir}
 
   evaluate:
-    foreach: ${evaluate.models}
+    foreach: ${models}
     do:
-      cmd: python -m fashion_seg.evaluate --model ${key}
+      cmd: python -m fashion_seg evaluate ${key}
       deps:
-        - ${item}
+        - ${item.output_dir}
         # prepared/ follows the dataset version. The images are read from data/ but pulled
         # separately (make pull-val), so they are not a dependency: a partial pull would record
         # the hash of whatever subset is on disk.
         - ${data.prepared_dir}
-        - src/fashion_seg/evaluate.py
+        - src/fashion_seg/service/evaluation.py
+        - src/fashion_seg/scoring.py
       params:
         - data.prepared_dir
         - data.train_images
         - data.label_file
+        - tracking.evaluation_experiment
         - evaluate
       metrics:
         - ${evaluate.output_dir}/evaluate-${key}.json:

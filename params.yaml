@@ -1,3 +1,4 @@
+# Pipeline parameters, validated at load time by fashion_seg.config (unknown keys are errors).
 data:
   train_csv: data/imaterialist/train.csv
   train_images: data/imaterialist/train
@@ -11,71 +12,68 @@ split:
   fold: 0
   seed: 42
 
-# Matterport Mask R-CNN (trainers/matterport). Defaults follow the 2021 notebook.
-train_matterport:
-  experiment: fashion-seg-training
-  output_dir: outputs/matterport
-  init_weights: weights/mask_rcnn_coco.h5   # COCO weights; heads are re-initialised
-  backbone: resnet101
-  image_min_dim: 800
-  image_max_dim: 1024
-  images_per_gpu: 2
-  rpn_anchor_scales: [16, 32, 64, 128, 256]
-  train_rois_per_image: 32
-  learning_rate: 0.0001
-  epochs: 2
-  layers: all                  # "heads", "3+", "4+", "5+" or "all"
-  steps_per_epoch: null        # null = one pass over the training images
-  validation_steps: null
-  max_train_images: null       # null = all
-  max_val_images: null
-  detection_min_confidence: 0.7
+tracking:
+  training_experiment: fashion-seg-training
+  packaging_experiment: fashion-maskrcnn
+  evaluation_experiment: fashion-seg-evaluation
+  registered_name: fashion-maskrcnn     # every packaged model is a version of it
 
-# Scores the packaged model (models/<name>) on the frozen split, as it is served.
-# Scores each packaged model on the frozen split, as it is served (evaluate@<name> stages).
+# Training parameters per model family (train_<family> stages), validated by the family's
+# Config (fashion_seg/families/<family>/__init__.py).
+train:
+  # Matterport Mask R-CNN. Defaults follow the 2021 notebook.
+  matterport:
+    output_dir: outputs/matterport
+    init_weights: weights/mask_rcnn_coco.h5   # COCO weights; heads are re-initialised
+    epochs: 2
+    max_train_images: null       # null = all
+    max_val_images: null
+    backbone: resnet101
+    image_min_dim: 800
+    image_max_dim: 1024
+    images_per_gpu: 2
+    rpn_anchor_scales: [16, 32, 64, 128, 256]
+    train_rois_per_image: 32
+    learning_rate: 0.0001
+    layers: all                  # "heads", "3+", "4+", "5+" or "all"
+    steps_per_epoch: null        # null = one pass over the training images
+    validation_steps: null
+    detection_min_confidence: 0.7
+
+  # torchvision Mask R-CNN v2, fine-tuned from COCO.
+  torchvision:
+    output_dir: outputs/torchvision
+    init_weights: weights/maskrcnn_resnet50_fpn_v2_coco.pth
+    epochs: 1
+    max_train_images: null    # null = all
+    max_val_images: 500       # validation loss each epoch on a subset (mAP: evaluate stage)
+    min_size: 800
+    max_size: 1024
+    batch_size: 2
+    learning_rate: 0.0025     # torchvision's 0.02 for batch 16, scaled to batch 2
+    momentum: 0.9
+    weight_decay: 0.0001
+    warmup_steps: 1000
+    num_workers: 4
+    log_every: 50
+    device: auto              # CUDA, then Apple GPU (MPS), then CPU
+    resume: true              # continue from checkpoints/last.pt if present
+
+# Served models: package@<name> wraps an export as an MLflow pyfunc model (the contract),
+# evaluate@<name> scores it.
+models:
+  legacy:                        # the 2021 model
+    family: matterport
+    source: deployement
+    output_dir: models/fashion-maskrcnn
+  torchvision:
+    family: torchvision
+    source: outputs/torchvision/model
+    output_dir: models/fashion-maskrcnn-torchvision
+
+# Scores each packaged model on the frozen split, as it is served.
 evaluate:
-  models:
-    legacy: models/fashion-maskrcnn
-    torchvision: models/fashion-maskrcnn-torchvision
   split: val
   max_images: null        # null = the whole split (5,703 images, ~1.5 h on CPU)
   min_score: 0.0          # request parameter; the 2021 model still drops < 0.7 in its graph
-  experiment: fashion-seg-evaluation
   output_dir: metrics
-
-# torchvision Mask R-CNN v2 (trainers/torchvision), fine-tuned from COCO.
-train_torchvision:
-  experiment: fashion-seg-training
-  output_dir: outputs/torchvision
-  init_weights: weights/maskrcnn_resnet50_fpn_v2_coco.pth
-  min_size: 800
-  max_size: 1024
-  batch_size: 2
-  epochs: 1
-  learning_rate: 0.0025     # torchvision's 0.02 for batch 16, scaled to batch 2
-  momentum: 0.9
-  weight_decay: 0.0001
-  warmup_steps: 1000
-  num_workers: 4
-  log_every: 50
-  device: auto              # CUDA, then Apple GPU (MPS), then CPU
-  resume: true              # continue from checkpoints/last.pt if present
-  max_train_images: null    # null = all
-  max_val_images: 500       # validation loss each epoch on a subset (mAP: evaluate stage)
-
-# Packaged models (python -m fashion_seg.package <section>): MLflow pyfunc + contract.
-legacy_model:
-  family: matterport
-  model_dir: deployement
-  label_file: data/imaterialist/label_descriptions.json
-  output_dir: models/fashion-maskrcnn
-  experiment: fashion-maskrcnn
-  registered_name: fashion-maskrcnn
-
-torchvision_model:
-  family: torchvision
-  model_dir: outputs/torchvision/model
-  label_file: data/imaterialist/label_descriptions.json
-  output_dir: models/fashion-maskrcnn-torchvision
-  experiment: fashion-maskrcnn
-  registered_name: fashion-maskrcnn

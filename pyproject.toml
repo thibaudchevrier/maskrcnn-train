@@ -3,38 +3,61 @@ name = "fashion-seg"
 version = "0.3.0"
 description = "Fashion instance segmentation on iMaterialist: data pipeline, training of several models, MLflow packaging"
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+# One package for every environment: the root one (Python 3.12) and the training environments
+# of families needing another Python (envs/matterport: 3.11). Keep these dependencies light and
+# framework-free; frameworks live in the orchestration group (root) or in envs/<name>.
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "fashion-seg-contract",
-    "fashion-seg-core",
-    "fashion-seg-torchvision",
-    "maskrcnn-matterport",
-    "mlflow>=3.16,<3.17",
-    "numpy>=2.5.3",
+    "mlflow>=3.16,<3.17",   # same minor version everywhere: every environment writes mlflow.db
+    "numpy>=1.23",
+    "pillow>=10",
     "polars>=1.20",
-    "pillow>=12.3.0",
-    "pyyaml>=6.0.3",
-    "scikit-learn>=1.5",
-    "tensorflow>=2.18",
     "pycocotools>=2.0.8",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "scikit-learn>=1.5",
 ]
+
+[dependency-groups]
+# Root environment: serves every family (TensorFlow 2.18+ for Matterport exports) and trains the
+# families running on its Python (torchvision).
+orchestration = [
+    "maskrcnn-matterport",
+    "numpy>=2.5.3",
+    "tensorflow>=2.18",
+    "torch>=2.8",
+    "torchvision>=0.23",
+]
+dev = [
+    "commitizen>=4.19",
+    "dvc[gdrive]>=3.59",
+    "jsonschema>=4.26.0",
+    "pre-commit>=4",
+    "pydoclint>=0.10.0",
+    "pylint>=4.0.9",
+    "pyopenssl>=24.2.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+]
+
+[tool.uv]
+default-groups = ["orchestration", "dev"]
+# The root environment is Python 3.12 only (.python-version); 3.11 is for envs/matterport.
+environments = ["python_version >= '3.12'"]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
-[tool.uv.workspace]
-members = ["packages/core", "trainers/torchvision"]
-
 [tool.uv.sources]
-fashion-seg-core = { workspace = true }
-fashion-seg-torchvision = { workspace = true }
 # Linux (CI, Docker, cloud CPU): CPU-only PyTorch wheels, without ~2 GB of CUDA libraries.
 # macOS wheels include the Apple GPU (MPS) backend.
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 # Released wheels, referenced by URL like packages from a registry (GitHub Releases).
+# Same URLs in envs/matterport/pyproject.toml.
 fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
 maskrcnn-matterport = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl" }
 
@@ -45,8 +68,8 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/fashion_seg"]
 
-# Lint config for all Python code (src/, tests/, packages/, trainers/). pylint's is per
-# environment: here for the orchestration env, in trainers/<name>/pyproject.toml for trainers.
+# Lint config for all Python code. pylint's is per environment: here for the root environment,
+# in envs/<name>/pyproject.toml for the code running only in a family's training environment.
 [tool.ruff]
 line-length = 100
 target-version = "py311"
@@ -57,7 +80,7 @@ extend-exclude = ["models", "outputs", "mlartifacts"]
 select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "D"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["fashion_seg", "fashion_seg_core", "fashion_seg_matterport", "fashion_seg_torchvision"]
+known-first-party = ["fashion_seg"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
@@ -72,22 +95,10 @@ arg-type-hints-in-docstring = true
 check-return-types = true
 
 [tool.pytest.ini_options]
-# Docstring examples are tests too.
-testpaths = ["src", "packages/core/src", "tests", "trainers/torchvision/src", "trainers/torchvision/tests"]
+# Docstring examples are tests too. conftest.py leaves out the code of other environments
+# (envs/matterport runs its own: make test-matterport).
+testpaths = ["src", "tests"]
 addopts = "--doctest-modules"
-
-[dependency-groups]
-dev = [
-    "commitizen>=4.19",
-    "dvc[gdrive]>=3.59",
-    "jsonschema>=4.26.0",
-    "pre-commit>=4",
-    "pydoclint>=0.10.0",
-    "pylint>=4.0.9",
-    "pyopenssl>=24.2.1",
-    "pytest>=9.1.1",
-    "ruff>=0.16.9",
-]
 
 [tool.pylint.main]
 py-version = "3.12"
@@ -96,11 +107,6 @@ extension-pkg-allow-list = ["numpy"]
 [tool.pylint."messages control"]
 # Import order is ruff's job (isort rules), which knows the first-party packages.
 disable = ["too-few-public-methods", "wrong-import-order", "ungrouped-imports"]
-
-[tool.pylint.design]
-# The numpy code ported from Matterport keeps its original, step-by-step structure.
-max-locals = 25
-max-attributes = 12
 
 [tool.pylint.format]
 max-line-length = 100
