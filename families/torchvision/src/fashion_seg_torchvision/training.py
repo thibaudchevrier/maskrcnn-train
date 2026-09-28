@@ -6,10 +6,10 @@ Writes to the directories the service gives (``TrainInputs``):
 - ``checkpoint_dir / "last.pt"``: model, optimizer, schedule and position, every
   ``checkpoint_every`` steps and at the end of each epoch, to resume.
 
-A run can stop at any step and resume there: each epoch's shuffle order is reproducible, so a
-resumed run skips the images the interrupted one had trained on. SIGINT (Ctrl+C) or SIGTERM stops
-it cleanly: the current step finishes, a checkpoint is saved, and the run exits asking to be
-started again.
+A run can stop at any step and resume there exactly: each epoch's shuffle order is reproducible
+(``fashion_seg.progress.epoch_order``), so a resumed run skips the images the stopped one had
+trained on. When the session's stop signal is set, the current step finishes, a checkpoint is
+saved and ``train`` returns where it stopped.
 """
 
 import json
@@ -17,20 +17,18 @@ import logging
 import math
 import shutil
 import signal
-import threading
 from collections import defaultdict
 from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from types import FrameType
 
 import torch
 import torchvision
 from torch.utils.data import DataLoader, Sampler
 from torchvision.models.detection import MaskRCNN
 
-from fashion_seg.ports import MetricLogger, TrainInputs, TrainResult
+from fashion_seg.ports import MetricLogger, StopSignal, TrainingSession, TrainInputs, TrainResult
+from fashion_seg.progress import epoch_order
 from fashion_seg_torchvision.config import Config
 from fashion_seg_torchvision.dataset import FashionDataset, collate
 from fashion_seg_torchvision.network import ARCHITECTURE, build_model, pick_device
@@ -46,7 +44,7 @@ class EpochSampler(Sampler[int]):
     size : int
         Number of images.
     seed : int
-        Shuffle seed; epoch ``e`` uses ``seed + e``.
+        Training seed (see ``fashion_seg.progress.epoch_order``).
 
     Attributes
     ----------
@@ -90,8 +88,7 @@ class EpochSampler(Sampler[int]):
         Iterator[int]
             Dataset indices.
         """
-        generator = torch.Generator().manual_seed(self.seed + self.epoch)
-        return iter(torch.randperm(self.size, generator=generator)[self.start :].tolist())
+        return iter(epoch_order(self.size, self.seed, self.epoch)[self.start :])
 
     def __len__(self) -> int:
         """Count the images left in the epoch.
@@ -147,38 +144,6 @@ def build_loaders(config: Config, inputs: TrainInputs) -> tuple[DataLoader, Data
             )
         )
     return loaders[0], loaders[1]
-
-
-@contextmanager
-def stop_on_signal() -> Iterator[threading.Event]:
-    """Turn SIGINT and SIGTERM into a stop request, checked between training steps.
-
-    Yields
-    ------
-    threading.Event
-        Set when a stop is requested.
-    """
-    requested = threading.Event()
-
-    def request_stop(signum: int, frame: FrameType | None) -> None:  # pylint: disable=unused-argument  # signal handler signature
-        """Record the stop request.
-
-        Parameters
-        ----------
-        signum : int
-            The signal.
-        frame : FrameType | None
-            The interrupted frame.
-        """
-        requested.set()
-        logger.warning("Stop requested (signal %d): saving after the current step", signum)
-
-    previous = {sig: signal.signal(sig, request_stop) for sig in (signal.SIGINT, signal.SIGTERM)}
-    try:
-        yield requested
-    finally:
-        for sig, handler in previous.items():
-            signal.signal(sig, handler)
 
 
 def lr_factor(step: int, warmup_steps: int, total_steps: int) -> float:
@@ -355,15 +320,15 @@ class Loop:
         Checkpoint file.
     checkpoint_every : int
         Steps between two checkpoints.
-    stop : threading.Event
-        Set when the run must stop (see ``stop_on_signal``).
+    stop : StopSignal
+        Set when the run must stop.
     """
 
     log_metrics: MetricLogger
     log_every: int
     checkpoint: Path
     checkpoint_every: int
-    stop: threading.Event
+    stop: StopSignal
 
 
 def train_step(state: TrainingState, images: list, targets: list) -> dict[str, float]:
@@ -500,7 +465,7 @@ def export_model(model: MaskRCNN, config: Config, num_classes: int, export_dir: 
     torch.save({k: v.cpu() for k, v in model.state_dict().items()}, export_dir / "model.pt")
 
 
-def train(config: Config, inputs: TrainInputs, log_metrics: MetricLogger) -> TrainResult:
+def train(config: Config, inputs: TrainInputs, session: TrainingSession) -> TrainResult:
     """Train (resuming from the last checkpoint if asked), validating each epoch, then export.
 
     Parameters
@@ -509,18 +474,14 @@ def train(config: Config, inputs: TrainInputs, log_metrics: MetricLogger) -> Tra
         Training parameters.
     inputs : TrainInputs
         Data, and where to write.
-    log_metrics : MetricLogger
-        Records the losses during training.
+    session : TrainingSession
+        Records the losses; tells when to stop.
 
     Returns
     -------
     TrainResult
-        Validation losses of the last epoch; architecture, framework versions and device.
-
-    Raises
-    ------
-    SystemExit
-        If the run was stopped (Ctrl+C, SIGTERM) before the end: its checkpoint is saved.
+        Validation losses of the last epoch; architecture, framework versions and device. If
+        stopped early: ``stopped_at``, the checkpoint saved and no export.
     """
     train_loader, val_loader = build_loaders(config, inputs)
     steps_per_epoch = math.ceil(inputs.train.height / config.batch_size)
@@ -529,28 +490,26 @@ def train(config: Config, inputs: TrainInputs, log_metrics: MetricLogger) -> Tra
     if config.resume and checkpoint.exists():
         state.restore(checkpoint)
         logger.info("Resuming at epoch %d, step %d", state.epoch, state.global_step)
+    tags = {
+        "architecture": ARCHITECTURE,
+        "torch_version": torch.__version__,
+        "torchvision_version": torchvision.__version__,
+        "device": state.device.type,
+    }
 
-    with stop_on_signal() as stop:
-        loop = Loop(log_metrics, config.log_every, checkpoint, config.checkpoint_every, stop)
-        while state.epoch < config.epochs:
-            done = state.global_step - state.epoch * steps_per_epoch
-            train_loader.sampler.set_position(state.epoch, done * config.batch_size)
-            if not train_one_epoch(state, train_loader, loop):
-                raise SystemExit(
-                    f"Stopped at step {state.global_step}, checkpoint saved: "
-                    "run the same command to resume."
-                )
-            state.val_losses = validate(state.model, val_loader, state.device)
-            log_metrics({**state.val_losses, "epoch": state.epoch}, step=state.global_step)
-            state.save(checkpoint)
-            logger.info("epoch %d: val loss %.4f", state.epoch, state.val_losses["val_loss"])
-    export_model(state.model, config, len(inputs.class_names), inputs.export_dir)
-    return TrainResult(
-        metrics=state.val_losses,
-        tags={
-            "architecture": ARCHITECTURE,
-            "torch_version": torch.__version__,
-            "torchvision_version": torchvision.__version__,
-            "device": state.device.type,
-        },
+    loop = Loop(
+        session.log_metrics, config.log_every, checkpoint, config.checkpoint_every, session.stop
     )
+    while state.epoch < config.epochs:
+        # Steps already done in this epoch (all of them if a stop came on its last step: the
+        # epoch then completes at once and is validated).
+        done = state.global_step - state.epoch * steps_per_epoch
+        train_loader.sampler.set_position(state.epoch, done * config.batch_size)
+        if not train_one_epoch(state, train_loader, loop):
+            return TrainResult(metrics=state.val_losses, tags=tags, stopped_at=state.global_step)
+        state.val_losses = validate(state.model, val_loader, state.device)
+        session.log_metrics({**state.val_losses, "epoch": state.epoch}, step=state.global_step)
+        state.save(checkpoint)
+        logger.info("epoch %d: val loss %.4f", state.epoch, state.val_losses["val_loss"])
+    export_model(state.model, config, len(inputs.class_names), inputs.export_dir)
+    return TrainResult(metrics=state.val_losses, tags=tags)

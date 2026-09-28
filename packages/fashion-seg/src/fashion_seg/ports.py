@@ -14,9 +14,10 @@ environment can load it, including the serving image of a packaged model.
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from contextlib import AbstractContextManager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
@@ -122,10 +123,44 @@ class TrainResult:
         Final metrics (e.g. last validation losses), written to ``metrics.json``.
     tags : dict[str, str]
         Run tags (framework versions, device...).
+    stopped_at : int | None
+        Step at which a stop request ended the training (checkpoint saved, no export); ``None``
+        when it completed. By default ``None``.
     """
 
     metrics: dict[str, float]
     tags: dict[str, str]
+    stopped_at: int | None = None
+
+
+class StopSignal(Protocol):
+    """Tells a training whether it must stop (e.g. after Ctrl+C); checked between steps."""
+
+    def is_set(self) -> bool:
+        """Tell whether a stop was requested.
+
+        Returns
+        -------
+        bool
+            ``True`` once a stop is requested.
+        """
+
+
+@dataclass(frozen=True)
+class TrainingSession:
+    """What a family's training reports to, and listens to.
+
+    Attributes
+    ----------
+    log_metrics : MetricLogger
+        Records metrics during training.
+    stop : StopSignal
+        Checked between steps: when set, the family saves a checkpoint and returns a
+        ``TrainResult`` with ``stopped_at`` (the next run resumes there).
+    """
+
+    log_metrics: MetricLogger
+    stop: StopSignal
 
 
 class ServingRequirements(Frozen):
@@ -182,9 +217,13 @@ class ModelFamily(Protocol):
     Config: type[TrainConfig]
 
     def train(
-        self, config: TrainConfig, inputs: TrainInputs, log_metrics: MetricLogger
+        self, config: TrainConfig, inputs: TrainInputs, session: TrainingSession
     ) -> TrainResult:
         """Train a model and write its servable export to ``inputs.export_dir``.
+
+        Resumes from the last checkpoint in ``inputs.checkpoint_dir`` when ``config.resume``;
+        checkpoints every ``config.checkpoint_every`` steps; stops early (after a checkpoint) when
+        ``session.stop`` is set.
 
         Parameters
         ----------
@@ -192,13 +231,13 @@ class ModelFamily(Protocol):
             Training parameters, an instance of the family's ``Config``.
         inputs : TrainInputs
             Data, and where to write.
-        log_metrics : MetricLogger
-            Records metrics during training.
+        session : TrainingSession
+            Records metrics; tells when to stop.
 
         Returns
         -------
         TrainResult
-            Final metrics and run tags.
+            Final metrics and run tags, or where it stopped.
         """
 
     def load_predictor(self, model_dir: Path) -> Predictor:
@@ -411,7 +450,10 @@ class Infrastructure:
         Experiment tracking.
     repository : ModelRepository
         Packaged models: publish, load, tag.
+    stop : StopSignal
+        Set when the process must stop (``adapters.signals``); never set by default.
     """
 
     tracker: Tracker
     repository: ModelRepository
+    stop: StopSignal = field(default_factory=threading.Event)

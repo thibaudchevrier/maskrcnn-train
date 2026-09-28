@@ -60,4 +60,5 @@ class Config(TrainConfig):
         "validation_steps": 1,
         "max_train_images": 4,
         "max_val_images": 2,
+        "log_every": 1,
     }

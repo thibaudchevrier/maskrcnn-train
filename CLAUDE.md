@@ -48,9 +48,10 @@ uv run --project families/torchvision python -m fashion_seg_torchvision train
 | `config.py` | pydantic models of `params.yaml`; `TrainConfig`, the base of every family's config | nothing |
 | `data/` | Pure dataset logic (`annotations.py`: per-image grouping and selection; `split.py`: the frozen split) and its files (`files.py`: `train.csv`, prepared annotations and split, images on disk) | itself |
 | `scoring.py` | COCO mask and box mAP of contract predictions (pycocotools) | nothing |
-| `ports.py` | The interfaces: `ModelFamily`, `Predictor`, `MetricLogger`, `Tracker`, `ModelRepository` (Protocols), `Detections`, `TrainInputs`, `TrainResult`, `ModelPackage`, `Infrastructure`, `FamilySpec` | `config` |
+| `ports.py` | The interfaces: `ModelFamily`, `Predictor`, `MetricLogger`, `StopSignal`, `Tracker`, `ModelRepository` (Protocols), `Detections`, `TrainInputs`, `TrainingSession`, `TrainResult`, `ModelPackage`, `Infrastructure`, `FamilySpec` | `config` |
+| `progress.py` | Where a training is in its data: each epoch's reproducible shuffle order (pure) | nothing |
 | `serving/` | `response.py`: the contract response built from `Detections` (pure); `pyfunc.py`: the MLflow pyfunc wrapper serving any family (the family's `load_predictor` is injected and pickled with the model) | `ports` |
-| `adapters/` | **Infrastructure**, behind the ports: `mlflow_tracking` (a `Tracker`), `mlflow_models` (a `ModelRepository`: log, register, save, load, tag). Modules of functions, duck-typed like the families | `ports`, `serving` |
+| `adapters/` | **Infrastructure**, behind the ports: `mlflow_tracking` (a `Tracker`), `mlflow_models` (a `ModelRepository`: log, register, save, load, tag), `signals` (Ctrl+C/SIGTERM as a `StopSignal`). Modules of functions, duck-typed like the families | `ports`, `serving` |
 | `service/` | **The workflow, generic over families and infrastructure**: `preparation`, `training`, `packaging`, `evaluation`. Imports no MLflow | `config`, `data`, `ports`, `scoring` |
 | `cli.py` | `main(family, argv)`: builds the infrastructure, runs `train`, `package <model>` or `evaluate <model>`, writes their result files | `adapters`, `config`, `ports`, `service` |
 | `__main__.py` | `python -m fashion_seg prepare`: the only step without a family | `config`, `service` |
@@ -69,6 +70,13 @@ against a temporary MLflow store.
 `tests/test_architecture.py` enforces these rules on the source of the library and of every
 family: a new import across layers, or MLflow outside the adapters and the serving wrapper,
 fails the tests.
+
+**Every family can be stopped and resumed.** `TrainConfig` carries `resume`, `checkpoint_every`,
+`log_every` and `seed`; `family.train` receives a `TrainingSession` (metrics logger and stop
+signal). A family checkpoints every `checkpoint_every` steps, and when `session.stop` is set it
+saves and returns `TrainResult(stopped_at=step)`; the service tags the run and the CLI exits
+asking to resume. Resuming restores the checkpoint in `inputs.checkpoint_dir`, as exactly as the
+framework allows (use `fashion_seg.progress.epoch_order` for a reproducible order).
 
 ### Design rules
 
@@ -143,7 +151,8 @@ fails the tests.
    its Python, its framework, `fashion-seg` by path (editable), `jsonschema`, `pylint` and
    `pytest` in `dev` (and `fashion-seg-testing` by path); `uv lock --project families/<name>`. Add a `serve/` environment only if
    serving needs other versions than training.
-2. `src/fashion_seg_<name>/__init__.py` implements `ports.ModelFamily`: `SPEC` (name, serving
+2. `src/fashion_seg_<name>/__init__.py` implements `ports.ModelFamily` (including stop and resume,
+   see above): `SPEC` (name, serving
    requirements), `Config` (a `config.TrainConfig` subclass with `smoke_overrides`), `train`,
    `load_predictor`, `describe`, importing the framework lazily. The model logic goes in
    submodules (`network`, `dataset`, `training`, `predictor`). `__main__.py`:
@@ -171,8 +180,8 @@ make prepare                  # dvc repro --single-item prepare
 make pull-sample              # a few images for smoke runs
 make train-matterport-smoke   # tiny training run on the pulled images
 make train-torchvision-smoke  # same for torchvision (Apple GPU if available)
-make train-torchvision        # full torchvision training in the background (resumable)
-make train-log / train-stop   # follow it / save and stop it (resume: make train-torchvision)
+make train FAMILY=torchvision # full training of a family in the background (resumable)
+make train-log / train-stop   # follow it / save and stop it (resume: make train again)
 make mlflow-ui                # http://localhost:5002
 make pull-val                 # validation images (VAL_IMAGES=200 for a subset)
 make evaluate-quick MODEL=legacy   # score a packaged model on 200 val images (not DVC-tracked)

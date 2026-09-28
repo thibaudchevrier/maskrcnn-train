@@ -14,7 +14,7 @@ from fashion_seg_contract.labels import load_class_names
 
 from fashion_seg.config import DataConfig, Params, TrainConfig
 from fashion_seg.data import files
-from fashion_seg.ports import ModelFamily, Tracker, TrainInputs, TrainResult
+from fashion_seg.ports import Infrastructure, ModelFamily, TrainingSession, TrainInputs, TrainResult
 
 
 def smoke_config(config: TrainConfig) -> TrainConfig:
@@ -107,11 +107,11 @@ def train(
     family: ModelFamily,
     config: TrainConfig,
     params: Params,
-    tracker: Tracker,
+    infra: Infrastructure,
     *,
     smoke: bool = False,
 ) -> TrainResult:
-    """Train a family's model in a tracked run.
+    """Train a family's model in a tracked run; it can stop early and resume later.
 
     Parameters
     ----------
@@ -121,8 +121,9 @@ def train(
         Its training parameters (an instance of ``family.Config``).
     params : Params
         The pipeline parameters (data, split, tracking).
-    tracker : Tracker
-        Records the run: parameters, the family's metrics, tags and the export.
+    infra : Infrastructure
+        The tracker records the run (parameters, the family's metrics, tags, the export); the
+        stop signal ends the training early, after a checkpoint.
     smoke : bool
         Smoke run: the family's smoke overrides, images on disk only, COCO weights optional,
         export not logged. By default ``False``.
@@ -130,7 +131,7 @@ def train(
     Returns
     -------
     TrainResult
-        The family's final metrics and tags.
+        The family's final metrics and tags, or ``stopped_at`` if it stopped early.
 
     Raises
     ------
@@ -145,6 +146,7 @@ def train(
 
     name = family.SPEC.name
     tags = {"model_family": name, "smoke": str(smoke).lower()}
+    tracker = infra.tracker
     with tracker.run(params.tracking.training_experiment, f"{name}-smoke" if smoke else name, tags):
         tracker.log_params(
             {
@@ -154,8 +156,10 @@ def train(
                 "n_val_images": inputs.val.height,
             }
         )
-        result = family.train(config, inputs, tracker.log_metrics)
+        result = family.train(config, inputs, TrainingSession(tracker.log_metrics, infra.stop))
         tracker.set_tags(result.tags)
-        if not smoke:
+        if result.stopped_at is not None:
+            tracker.set_tags({"stopped_at_step": str(result.stopped_at)})
+        elif not smoke:
             tracker.log_artifacts(inputs.export_dir, "model")
     return result

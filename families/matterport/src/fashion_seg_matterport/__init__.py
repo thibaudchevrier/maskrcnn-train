@@ -22,9 +22,9 @@ from typing import Any
 
 from fashion_seg.ports import (
     FamilySpec,
-    MetricLogger,
     Predictor,
     ServingRequirements,
+    TrainingSession,
     TrainInputs,
     TrainResult,
 )
@@ -42,7 +42,7 @@ SPEC = FamilySpec(
 DESCRIBED = ("BACKBONE", "NUM_CLASSES", "IMAGE_MAX_DIM", "RPN_ANCHOR_SCALES")
 
 
-def train(config: Config, inputs: TrainInputs, log_metrics: MetricLogger) -> TrainResult:
+def train(config: Config, inputs: TrainInputs, session: TrainingSession) -> TrainResult:
     """Train Matterport Mask R-CNN and export it (see ``training.train``).
 
     Parameters
@@ -51,8 +51,8 @@ def train(config: Config, inputs: TrainInputs, log_metrics: MetricLogger) -> Tra
         Training parameters.
     inputs : TrainInputs
         Data, and where to write.
-    log_metrics : MetricLogger
-        Records every epoch's losses.
+    session : TrainingSession
+        Records the losses; tells when to stop.
 
     Returns
     -------
@@ -62,7 +62,7 @@ def train(config: Config, inputs: TrainInputs, log_metrics: MetricLogger) -> Tra
     # pylint: disable-next=import-outside-toplevel  # TensorFlow 2.15: training environment only
     from fashion_seg_matterport import training
 
-    return training.train(config, inputs, log_metrics)
+    return training.train(config, inputs, session)
 
 
 def load_predictor(model_dir: Path) -> Predictor:

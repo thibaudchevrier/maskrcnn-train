@@ -26,17 +26,8 @@ class Config(TrainConfig):
         Steps of linear warm-up, before the cosine decay.
     num_workers : int
         Data loading processes.
-    log_every : int
-        Steps between two logs of the training losses.
-    checkpoint_every : int
-        Steps between two checkpoints (a stopped run resumes from the last one). By default 500.
-    seed : int
-        Shuffle seed of the training images (the order must be reproducible to resume mid-epoch).
-        By default 0.
     device : Literal["auto", "cuda", "mps", "cpu"]
         ``"auto"``: CUDA, then Apple GPU (MPS), then CPU. By default ``"auto"``.
-    resume : bool
-        Continue from the last checkpoint if there is one. By default ``True``.
     smoke_overrides : ClassVar[dict[str, Any]]
         Parameters replaced for a smoke run.
     """
@@ -49,11 +40,7 @@ class Config(TrainConfig):
     weight_decay: float
     warmup_steps: int
     num_workers: int
-    log_every: int
-    checkpoint_every: int = 500
-    seed: int = 0
     device: Literal["auto", "cuda", "mps", "cpu"] = "auto"
-    resume: bool = True
     smoke_overrides: ClassVar[dict[str, Any]] = {
         "min_size": 256,
         "max_size": 320,

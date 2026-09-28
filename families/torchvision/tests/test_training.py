@@ -1,15 +1,14 @@
 """End-to-end check of the torchvision family through its CLI, on synthetic data (CPU, no DVC)."""
 
 import json
-import os
-import signal
+import threading
 
 import polars as pl
 import pytest
 
 import fashion_seg_torchvision
 from fashion_seg.cli import main
-from fashion_seg.ports import ModelFamily, TrainInputs
+from fashion_seg.ports import ModelFamily, TrainingSession, TrainInputs
 from fashion_seg_testing import write_dataset, write_params
 from fashion_seg_torchvision import training
 from fashion_seg_torchvision.config import Config
@@ -90,7 +89,7 @@ def test_sampler_order_is_reproducible_and_resumable():
 
 
 def test_a_stopped_run_resumes_mid_epoch(tmp_path):
-    """SIGINT saves a checkpoint and stops; the next run continues at the following step."""
+    """A stop saves a checkpoint and returns; the next run continues at the following step."""
     write_dataset(tmp_path, n_images=5, height=120, width=160)
     records = pl.read_parquet(tmp_path / "prepared" / "annotations.parquet")
     inputs = TrainInputs(
@@ -118,21 +117,25 @@ def test_a_stopped_run_resumes_mid_epoch(tmp_path):
         device="cpu",
     )
 
+    stop = threading.Event()
+
     def stop_at_step_two(metrics, step=None):  # pylint: disable=unused-argument  # MetricLogger
         """Ask to stop, like Ctrl+C, once step 2 is logged."""
         if step == 2:
-            os.kill(os.getpid(), signal.SIGINT)
+            stop.set()
 
-    with pytest.raises(SystemExit, match="step 2"):
-        training.train(config, inputs, stop_at_step_two)
+    stopped = training.train(config, inputs, TrainingSession(stop_at_step_two, stop))
+    assert stopped.stopped_at == 2
     assert (tmp_path / "checkpoints" / "last.pt").exists()
     assert not (tmp_path / "model").exists()
 
     steps = []
-    result = training.train(
-        config,
-        inputs,
-        lambda metrics, step=None: steps.append(step) if "train_loss" in metrics else None,
-    )
+
+    def record(metrics, step=None):
+        """Record the steps of the training losses."""
+        if "train_loss" in metrics:
+            steps.append(step)
+
+    result = training.train(config, inputs, TrainingSession(record, threading.Event()))
     assert steps == [3, 4]  # the 4 images of the epoch: 2 before the stop, 2 after
     assert "val_loss" in result.metrics and (tmp_path / "model" / "model.pt").exists()
