@@ -13,7 +13,7 @@ import logging
 import math
 import shutil
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -133,6 +133,8 @@ class TrainingState:
         Epochs completed.
     global_step : int
         Optimizer steps completed.
+    val_losses : dict[str, float]
+        Validation losses after the last completed epoch.
     """
 
     model: MaskRCNN
@@ -141,6 +143,7 @@ class TrainingState:
     device: torch.device
     epoch: int = 0
     global_step: int = 0
+    val_losses: dict[str, float] = field(default_factory=dict)
 
     def save(self, path: Path) -> None:
         """Write a checkpoint that ``restore`` can resume from.
@@ -158,6 +161,7 @@ class TrainingState:
                 "scheduler": self.scheduler.state_dict(),
                 "epoch": self.epoch,
                 "global_step": self.global_step,
+                "val_losses": self.val_losses,
             },
             path,
         )
@@ -175,6 +179,7 @@ class TrainingState:
         self.optimizer.load_state_dict(state["optimizer"])
         self.scheduler.load_state_dict(state["scheduler"])
         self.epoch, self.global_step = state["epoch"], state["global_step"]
+        self.val_losses = state.get("val_losses", {})
 
 
 def init_state(config: Config, num_classes: int, steps_per_epoch: int) -> TrainingState:
@@ -342,16 +347,15 @@ def train(config: Config, inputs: TrainInputs, log_metrics: MetricLogger) -> Tra
         state.restore(checkpoint)
         logger.info("Resuming after epoch %d (step %d)", state.epoch, state.global_step)
 
-    val_losses: dict[str, float] = {}
     while state.epoch < config.epochs:
         train_one_epoch(state, train_loader, config.log_every, log_metrics)
-        val_losses = validate(state.model, val_loader, state.device)
-        log_metrics({**val_losses, "epoch": state.epoch}, step=state.global_step)
+        state.val_losses = validate(state.model, val_loader, state.device)
+        log_metrics({**state.val_losses, "epoch": state.epoch}, step=state.global_step)
         state.save(checkpoint)
-        logger.info("epoch %d: val loss %.4f", state.epoch, val_losses["val_loss"])
+        logger.info("epoch %d: val loss %.4f", state.epoch, state.val_losses["val_loss"])
     export_model(state.model, config, len(inputs.class_names), inputs.export_dir)
     return TrainResult(
-        metrics=val_losses,
+        metrics=state.val_losses,
         tags={
             "architecture": ARCHITECTURE,
             "torch_version": torch.__version__,

@@ -60,3 +60,5 @@ def test_smoke_training_exports_and_resumes(params_file, caplog):
     caplog.set_level("INFO")
     main(argv)
     assert "Resuming after epoch 1" in caplog.text
+    # nothing left to train: the metrics are the checkpoint's, not empty
+    assert "val_loss" in json.loads((out / "metrics.json").read_text())
