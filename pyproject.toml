@@ -7,6 +7,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "fashion-seg-contract",
     "fashion-seg-core",
+    "fashion-seg-torchvision",
     "maskrcnn-matterport",
     "mlflow>=3.16,<3.17",
     "numpy>=2.5.3",
@@ -18,11 +19,21 @@ dependencies = [
     "pycocotools>=2.0.8",
 ]
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.uv.workspace]
-members = ["packages/core"]
+members = ["packages/core", "trainers/torchvision"]
 
 [tool.uv.sources]
 fashion-seg-core = { workspace = true }
+fashion-seg-torchvision = { workspace = true }
+# Linux (CI, Docker, cloud CPU): CPU-only PyTorch wheels, without ~2 GB of CUDA libraries.
+# macOS wheels include the Apple GPU (MPS) backend.
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 # Released wheels, referenced by URL like packages from a registry (GitHub Releases).
 fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
 maskrcnn-matterport = { url = "https://github.com/thibaudchevrier/maskrcnn-matterport-tf2/releases/download/v0.3.1/maskrcnn_matterport-0.3.1-py3-none-any.whl" }
@@ -46,7 +57,7 @@ extend-exclude = ["models", "outputs", "mlartifacts"]
 select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "D"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["fashion_seg", "fashion_seg_core", "fashion_seg_matterport"]
+known-first-party = ["fashion_seg", "fashion_seg_core", "fashion_seg_matterport", "fashion_seg_torchvision"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
@@ -62,7 +73,7 @@ check-return-types = true
 
 [tool.pytest.ini_options]
 # Docstring examples are tests too.
-testpaths = ["src", "packages/core/src", "tests"]
+testpaths = ["src", "packages/core/src", "tests", "trainers/torchvision/src", "trainers/torchvision/tests"]
 addopts = "--doctest-modules"
 
 [dependency-groups]

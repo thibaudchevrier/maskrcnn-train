@@ -22,4 +22,4 @@ __pycache__/
 /prepared
 
 # Quick (subset) evaluations: not the tracked result
-/metrics/evaluate-quick.json
+/metrics/*-quick.json

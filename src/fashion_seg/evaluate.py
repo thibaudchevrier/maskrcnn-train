@@ -5,10 +5,11 @@ artifact, whatever its framework. Results go to:
 
 - MLflow: a run in the ``fashion-seg-evaluation`` experiment (metrics, per-class AP table), and
   ``val_*`` tags on the registered model version;
-- ``metrics/evaluate.json``, for ``dvc metrics show`` / ``dvc metrics diff``.
+- ``metrics/evaluate-<model>.json``, for ``dvc metrics show`` / ``dvc metrics diff``.
 
-Run through DVC (``uv run dvc repro --single-item evaluate``) on the whole split, or quickly on a
-subset with ``make evaluate-quick``.
+``--model`` names one of ``params.yaml:evaluate.models`` (``legacy``, ``torchvision``). Run through
+DVC (``uv run dvc repro --single-item evaluate@legacy``) on the whole split, or quickly on a subset
+with ``make evaluate-quick MODEL=legacy``.
 """
 
 import argparse
@@ -366,7 +367,8 @@ def log_to_mlflow(
     Parameters
     ----------
     params : dict[str, Any]
-        The ``evaluate`` section of ``params.yaml``.
+        The ``evaluate`` section of ``params.yaml``, with the evaluated ``model`` and
+        ``model_dir``.
     provenance : dict[str, Any]
         The packaged model's ``provenance.json`` (registered name and version).
     metrics : dict[str, float]
@@ -376,9 +378,16 @@ def log_to_mlflow(
     """
     name, version = provenance["registered_name"], str(provenance["registered_version"])
     setup_experiment(params["experiment"])
-    with mlflow.start_run(run_name=f"{name}-v{version}-{params['split']}"):
-        mlflow.set_tags({"registered_name": name, "registered_version": version})
-        mlflow.log_params({**params, "model_uri": provenance["model_uri"]})
+    with mlflow.start_run(run_name=f"{params['model']}-v{version}-{params['split']}"):
+        mlflow.set_tags(
+            {
+                "registered_name": name,
+                "registered_version": version,
+                "model_family": provenance.get("model_family", "matterport"),
+            }
+        )
+        logged = {k: v for k, v in params.items() if k not in ("models", "output_dir")}
+        mlflow.log_params({**logged, "model_uri": provenance["model_uri"]})
         mlflow.log_metrics(metrics)
         for row in per_class.iter_rows(named=True):
             if row["mask_ap"] == row["mask_ap"]:  # skip NaN: no ground truth for the class
@@ -403,15 +412,19 @@ def main(argv: list[str] | None = None) -> None:
         Command-line arguments, ``sys.argv[1:]`` when ``None``. By default ``None``.
     """
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--model", required=True, help="a key of evaluate.models, e.g. legacy")
     parser.add_argument("--params", default="params.yaml")
     parser.add_argument("--max-images", type=int, help="override evaluate.max_images")
-    parser.add_argument("--output", help="override evaluate.output")
+    parser.add_argument(
+        "--output", help="metrics file (default: <output_dir>/evaluate-<model>.json)"
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     data, params = load_params(args.params)
     if args.max_images is not None:
         params["max_images"] = args.max_images
+    params["model"], params["model_dir"] = args.model, params["models"][args.model]
     model_dir = Path(params["model_dir"])
     provenance = json.loads((model_dir / "provenance.json").read_text(encoding="utf-8"))
     records = select_images(data, params)
@@ -426,7 +439,7 @@ def main(argv: list[str] | None = None) -> None:
         params["min_score"],
     )
     log_to_mlflow(params, provenance, metrics, per_class)
-    output = Path(args.output or params["output"])
+    output = Path(args.output or Path(params["output_dir"]) / f"evaluate-{args.model}.json")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
     logger.info(

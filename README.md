@@ -41,12 +41,14 @@ imports and serves.
 | `packages/core/` | `fashion-seg-core`: prepared annotations and MLflow setup, shared by the orchestration env and every trainer | git |
 | `src/fashion_seg/` | Orchestration (Python 3.12): `prepare` stage, packaging, the MLflow serving wrapper (`serving/`), one predictor adapter per model family (`predictors/`) | git |
 | `trainers/matterport/` | Matterport Mask R-CNN trainer: its own uv project (Python 3.11, `maskrcnn-matterport[train]`, i.e. TensorFlow 2.15) | git |
+| `trainers/torchvision/` | torchvision Mask R-CNN v2 trainer (`fashion-seg-torchvision`): PyTorch, part of the orchestration environment; trains on CUDA or the Apple GPU (MPS) | git |
 | `data/` | iMaterialist images + `train.csv` + `label_descriptions.json` (~23.7 GB, 48k files) | DVC (`data.dvc`) |
 | `prepared/` | `annotations.parquet` (one row per image) + `split.json` (frozen train/val ids) | DVC (`prepare` stage) |
 | `weights/mask_rcnn_coco.h5` | COCO starting weights, imported from Matterport's release | DVC (`import-url`) |
 | `outputs/<model>/` | Trained model (`model/`: `config.json` + SavedModel) and `metrics.json` | DVC (`train_<model>` stage) |
 | `deployement/` | 2021 Matterport model (TF SavedModel + `config.json`) | DVC (`deployement.dvc`) |
-| `models/fashion-maskrcnn/` | **Build output**: the packaged MLflow model consumed by fashion-serving | DVC (`package_legacy` stage) |
+| `models/fashion-maskrcnn/` | **Build output**: the packaged 2021 model, the one fashion-serving imports today | DVC (`package_legacy` stage) |
+| `models/fashion-maskrcnn-torchvision/` | **Build output**: the packaged torchvision model | DVC (`package_torchvision` stage) |
 | `mlruns/` | Archive: a Nov 2024 MLflow 1.30 log of the 2021 weights (no params or metrics) | DVC (`mlruns.dvc`) |
 | `mlflow.db`, `mlartifacts/` | Local MLflow tracking store | not versioned |
 
@@ -74,18 +76,21 @@ tracks `tool.uv.sources` as a parameter of that stage, so the model is re-packag
 
 ```
 data/imaterialist/train.csv ─► prepare ─► prepared/ ─┐
-data/imaterialist/train/ ────────────────────────────┼─► train_matterport ─► outputs/matterport/
-weights/mask_rcnn_coco.h5 ───────────────────────────┘
-deployement/ + labels ──────────────────────────────────► package_legacy ──► models/fashion-maskrcnn/
-models/fashion-maskrcnn/ + prepared/ + val images ──────► evaluate ────────► metrics/evaluate.json
+data/imaterialist/train/ ────────────────────────────┼─► train_matterport  ─► outputs/matterport/
+weights/mask_rcnn_coco.h5 ───────────────────────────┤
+weights/maskrcnn_resnet50_fpn_v2_coco.pth ───────────┴─► train_torchvision ─► outputs/torchvision/
+deployement/ (2021 model) ────────────────────────────► package_legacy      ─► models/fashion-maskrcnn/
+outputs/torchvision/model ────────────────────────────► package_torchvision ─► models/fashion-maskrcnn-torchvision/
+models/<packaged> + prepared/ + val images ───────────► evaluate@<model>    ─► metrics/evaluate-<model>.json
 ```
 
 | Stage | Environment | What it does |
 |-------|-------------|--------------|
 | `prepare` | orchestration | Groups `train.csv` (333k masks) into one row per image, and writes the frozen split: images sorted by id, `KFold(8, shuffle, seed 42)`, fold 0 = validation (39,920 train / 5,703 val), the procedure of the 2021 notebook |
 | `train_matterport` | `trainers/matterport` | Starts from COCO weights, trains with the 2021 notebook's settings (`params.yaml:train_matterport`), logs every epoch's losses to the MLflow experiment `fashion-seg-training`, exports the inference model and `metrics.json` |
-| `package_legacy` | orchestration | Wraps the 2021 model as an MLflow pyfunc model, registers a new `fashion-maskrcnn` version, writes `models/fashion-maskrcnn/` |
-| `evaluate` | orchestration | Loads the packaged model as it is served, predicts the validation split, computes COCO mask and box mAP (plus AP50, AP75, recall, per-class AP) with pycocotools; logs to the MLflow experiment `fashion-seg-evaluation`, tags the registered model version (`val_mask_map`...), writes `metrics/evaluate.json` |
+| `train_torchvision` | orchestration | Fine-tunes torchvision Mask R-CNN v2 from COCO (`params.yaml:train_torchvision`) on CUDA, the Apple GPU or CPU; logs losses, learning rate and per-epoch validation losses to `fashion-seg-training`; checkpoints every epoch (`resume: true` continues an interrupted run); exports `config.json` + `model.pt` |
+| `package_legacy`, `package_torchvision` | orchestration | `python -m fashion_seg.package <section>`: wraps a model export as an MLflow pyfunc model that serves the contract, with its own requirements (TensorFlow or PyTorch, never both); registers a new `fashion-maskrcnn` version tagged with its `model_family`; writes `models/<name>/` |
+| `evaluate@legacy`, `evaluate@torchvision` | orchestration | Loads a packaged model as it is served, predicts the validation split, computes COCO mask and box mAP (plus AP50, AP75, recall, per-class AP) with pycocotools; logs to the MLflow experiment `fashion-seg-evaluation`, tags the registered model version (`val_mask_map`...), writes `metrics/evaluate-<model>.json` |
 
 Each stage re-runs only when its inputs (files, code, `params.yaml` section) changed since `dvc.lock`.
 
@@ -131,22 +136,34 @@ make install     # orchestration env (.venv) + Matterport trainer env (trainers/
 
 ### Train a model
 
-```bash
-# quick end-to-end check on the sample images (~1 min, logged as run "matterport-smoke")
-make train-matterport-smoke
+**torchvision (recommended)**, PyTorch on the Apple GPU (MPS) or CUDA:
 
-# real training: needs the full dataset. On CPU this takes days; use a GPU machine
+```bash
+make pull-sample && make train-torchvision-smoke        # end-to-end check, ~15 s
+uv run dvc repro --single-item train_torchvision        # needs data.dvc (~24 GB) + weights/
+uv run dvc repro --single-item package_torchvision
+uv run dvc repro --single-item evaluate@torchvision      # compare with evaluate@legacy
+```
+
+Measured on an M4 Pro: 0.8 s per step (2 images, 1024 px) on the Apple GPU, 4.9 s on the CPU, so
+about 5 hours per epoch (~20,000 steps). Checkpoints are written after each epoch: with
+`resume: true`, re-running the stage continues an interrupted training.
+
+**Matterport** (the 2021 model's architecture; TensorFlow 2.15, CPU-only on a Mac):
+
+```bash
+make train-matterport-smoke
 uv run dvc repro --single-item train_matterport
 ```
 
-Tune by editing `params.yaml:train_matterport` (epochs, learning rate, layers, image size...), or
-without editing it: `uv run dvc exp run --single-item train_matterport -S train_matterport.learning_rate=0.001`.
-Compare in MLflow (`make mlflow-ui`) and with `uv run dvc metrics show`.
+Tune by editing `params.yaml:train_<model>` (epochs, learning rate, image size...), or without
+editing it: `uv run dvc exp run --single-item train_torchvision -S train_torchvision.epochs=2`.
+Compare trainings in MLflow (`make mlflow-ui`); compare models with the `evaluate` stage.
 
 ### Package and publish
 
 ```bash
-uv run dvc repro --single-item package_legacy   # re-packages only if its inputs changed
+uv run dvc repro --single-item package_legacy   # or package_torchvision; skipped if unchanged
 make check                                      # ruff, pylint, all tests
 uv run dvc push                                 # upload new outputs to Google Drive
 git add -A && git commit -m "..." && git push   # open a PR; CI checks lint, tests, dvc.lock freshness
@@ -154,21 +171,21 @@ git add -A && git commit -m "..." && git push   # open a PR; CI checks lint, tes
 
 After the merge, deploy it in fashion-serving with `dvc update` (see its README).
 
-### Evaluate the packaged model
+### Evaluate a packaged model
 
 ```bash
-make pull-val                                   # the 5,703 validation images (~3 GB)
-uv run dvc repro --single-item evaluate         # whole split (~2 h on CPU), tracked by DVC
-uv run dvc metrics show                         # mask_map, box_map, ...
+make pull-val                                        # the 5,703 validation images (~3 GB)
+uv run dvc repro --single-item evaluate@legacy       # whole split (~2 h on CPU), tracked by DVC
+uv run dvc metrics show                              # mask_map, box_map, ... per model
 
-VAL_IMAGES=200 make pull-val && make evaluate-quick   # 200 images, ~5 min, not tracked by DVC
+VAL_IMAGES=200 make pull-val && make evaluate-quick MODEL=legacy   # 200 images, ~5 min
 ```
 
 The model is loaded from `models/<name>` exactly as fashion-serving loads it, so the score describes
 the deployed model, whatever its framework. Each run is logged to MLflow (`fashion-seg-evaluation`)
 with the per-class AP table as an artifact; a whole-split run also tags the registered model
-version, so the registry shows its score. Quick runs write `metrics/evaluate-quick.json` and don't
-tag the registry.
+version, so the registry shows its score. Quick runs write `metrics/evaluate-<model>-quick.json`
+and don't tag the registry.
 
 ### Browse experiments
 
@@ -192,14 +209,19 @@ under `Final_project/model/train_results` (outside DVC).
 
 ### Add a model family
 
-1. Create `trainers/<name>/`: a uv project depending on `fashion-seg-core` (path dependency),
-   `fashion-seg-contract` (wheel URL) and its framework. Read `prepared/annotations.parquet` and `prepared/split.json` so every model uses the
-   same data and split.
-2. Log to the `fashion-seg-training` experiment with a `model_family` tag; write `outputs/<name>/`.
-3. Add a `train_<name>` stage to `dvc.yaml` and a `train_<name>` section to `params.yaml`.
-4. To serve it: add `src/fashion_seg/predictors/<name>.py`, a predictor returning `Detections`
-   (see `predictors/base.py`), and package it through `FashionSegmentationModel`, so the response
-   contract stays the same.
+`trainers/torchvision/` is the reference implementation.
+
+1. Create `trainers/<name>/`: a uv project using `fashion-seg-core` and `fashion-seg-contract`. A
+   workspace member if it runs on the orchestration Python and dependencies (like torchvision), its
+   own environment otherwise (like Matterport). Read `prepared/annotations.parquet` and
+   `prepared/split.json` so every model uses the same data and split.
+2. Log to the `fashion-seg-training` experiment with a `model_family` tag; export to
+   `outputs/<name>/model`.
+3. Add `train_<name>` and `package_<name>` stages to `dvc.yaml`, and `train_<name>` and
+   `<name>_model` sections to `params.yaml`; add the packaged model to `evaluate.models`.
+4. Add `src/fashion_seg/predictors/<name>.py`, a predictor returning `Detections` (see
+   `predictors/base.py`), register it in `serving/pyfunc.py:load_predictor`, and describe the
+   family's requirements in `fashion_seg/package.py:FAMILIES`.
 
 ## Model contract
 
@@ -289,7 +311,9 @@ Testing):
 
 ## Roadmap
 
-1. **Generic `package` stage**: package the best evaluated model (not only the 2021 one) and mark it
-   `@champion` in the MLflow registry; CI comments `dvc metrics diff` on the PR.
-2. **torchvision trainer** (`trainers/torchvision/`, PyTorch, runs on Apple Silicon GPUs).
-3. **Augmentation** for the Matterport trainer (imgaug is unmaintained; needs a compatible substitute).
+1. **First torchvision training** (1 epoch, ~5 h on the Apple GPU) and its evaluation against the
+   2021 baseline.
+2. **Promotion**: mark the best evaluated model `@champion` in the MLflow registry and serve it;
+   CI comments `dvc metrics diff` on the PR.
+3. **Pre-resized images** (a `prepare` output at 1024 px) to speed up data loading.
+4. **Augmentation** for the Matterport trainer (imgaug is unmaintained; needs a compatible substitute).

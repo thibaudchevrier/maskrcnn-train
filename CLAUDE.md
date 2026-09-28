@@ -14,6 +14,7 @@ which [fashion-serving](https://github.com/thibaudchevrier/fashion-serving) impo
 | `packages/core/` | `fashion-seg-core`: prepared annotations, MLflow setup (training-side code shared by every trainer) | all |
 | `src/fashion_seg/` | `prepare` stage, packaging, MLflow serving wrapper (`serving/`), predictor adapters (`predictors/`) | orchestration (Python 3.12, TF 2.21) |
 | `trainers/matterport/` | Matterport trainer, own uv project | Python 3.11, `maskrcnn-matterport[train]` (TF 2.15) |
+| `trainers/torchvision/` | torchvision Mask R-CNN v2 trainer (`fashion-seg-torchvision`), workspace member | orchestration (PyTorch; CPU wheels on Linux) |
 | `dvc.yaml`, `params.yaml`, `dvc.lock` | Pipeline stages, their parameters, the hashes of their inputs/outputs | |
 
 Released packages used here: `fashion-seg-contract` (response schema, RLE, labels) and
@@ -30,8 +31,9 @@ Released packages used here: `fashion-seg-contract` (response schema, RLE, label
   - Never commit data, models, `mlflow.db` or `mlartifacts/`; never edit `dvc.lock` or `*.dvc` by
     hand.
 - **Models are served through the contract**: package every model with
-  `FashionSegmentationModel` and a predictor in `src/fashion_seg/predictors/` returning
-  `Detections` (`predictors/base.py`). Never log a raw framework flavor (`mlflow.pytorch`...) for
+  `python -m fashion_seg.package` (`FashionSegmentationModel` + a predictor in
+  `src/fashion_seg/predictors/` returning `Detections`); a packaged model ships only its own
+  framework (see `FAMILIES` in `package.py`). Never log a raw framework flavor (`mlflow.pytorch`...) for
   serving: fashion-serving only understands the contract.
 - **Every model trains and is evaluated on the same data**: `prepared/annotations.parquet` and
   `prepared/split.json`, read with `fashion_seg_core.annotations`. Models are compared with the
@@ -48,11 +50,10 @@ Released packages used here: `fashion-seg-contract` (response schema, RLE, label
 
 ### Adding a model family
 
-1. `trainers/<name>/`: a uv project depending on `fashion-seg-core` (path) and
-   `fashion-seg-contract` (wheel URL), with its own pylint config and tests.
-2. A `train_<name>` stage in `dvc.yaml`, a `train_<name>` section in `params.yaml`.
-3. A predictor in `src/fashion_seg/predictors/<name>.py`.
-4. Hooks for its environment in `.pre-commit-config.yaml` (pylint) and a CI job for its tests.
+Follow `trainers/torchvision/` (see the README, "Add a model family"): trainer project (workspace
+member when it shares the orchestration Python, own environment otherwise), `train_<name>` and
+`package_<name>` stages, a predictor registered in `load_predictor`, its requirements in
+`FAMILIES`, an `evaluate.models` entry, lint hooks and tests.
 
 ## Commands
 
@@ -66,11 +67,12 @@ make check                    # lint + test: run before every commit
 make prepare                  # dvc repro --single-item prepare
 make pull-sample              # a few images for smoke runs
 make train-matterport-smoke   # tiny training run on the pulled images
+make train-torchvision-smoke  # same for torchvision (Apple GPU if available)
 make mlflow-ui                # http://localhost:5002
 make pull-val                 # validation images (VAL_IMAGES=200 for a subset)
-make evaluate-quick           # score the packaged model on 200 val images (not DVC-tracked)
-uv run dvc repro --single-item evaluate          # score it on the whole split
-uv run dvc repro --single-item package_legacy   # re-package the served model
+make evaluate-quick MODEL=legacy   # score a packaged model on 200 val images (not DVC-tracked)
+uv run dvc repro --single-item evaluate@legacy   # score it on the whole split
+uv run dvc repro --single-item package_legacy    # re-package a model (or package_torchvision)
 ```
 
 ## Standards
