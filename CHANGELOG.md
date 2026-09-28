@@ -1,3 +1,24 @@
+## v0.4.0 (2026-09-28)
+
+### BREAKING CHANGE
+
+- commands are `python -m fashion_seg prepare` and
+`uv run --project families/<...> python -m fashion_seg_<family> train|package|evaluate`;
+DVC stages are package_<model> and evaluate_<model>.
+- commands are now `python -m fashion_seg prepare|train|package|evaluate`;
+DVC stages package_legacy/package_torchvision become package@legacy/package@torchvision;
+params.yaml sections train_<family>, legacy_model and torchvision_model become
+train.<family>, models.<name> and tracking.
+
+### Fix
+
+- **torchvision**: keep the validation losses when a finished run resumes
+
+### Refactor
+
+- one uv project and entrypoint per model family
+- ports-and-adapters architecture for the training workflow
+
 ## v0.3.0 (2026-09-28)
 
 ### Feat
