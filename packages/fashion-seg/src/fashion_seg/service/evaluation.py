@@ -11,7 +11,6 @@ Run through DVC (``uv run dvc repro --single-item evaluate@legacy``) on the whol
 on a subset with ``make evaluate-quick MODEL=legacy``.
 """
 
-import base64
 import json
 import logging
 import re
@@ -25,6 +24,7 @@ import mlflow
 import mlflow.pyfunc
 import pandas as pd
 import polars as pl
+from fashion_seg_contract import request
 from fashion_seg_contract.labels import load_class_names
 from fashion_seg_contract.schema import Prediction
 
@@ -59,9 +59,8 @@ def predict_images(
         The model's response for each image, in order.
     """
     for path in paths:
-        payload = base64.b64encode(path.read_bytes()).decode("ascii")
-        request = pd.DataFrame({"image": [payload]})
-        yield model.predict(request, params={"min_score": min_score})[0]
+        rows = pd.DataFrame({request.IMAGE_FIELD: [request.encode_image(path.read_bytes())]})
+        yield model.predict(rows, params={request.MIN_SCORE_PARAM: min_score})[0]
 
 
 def slug(label: str) -> str:

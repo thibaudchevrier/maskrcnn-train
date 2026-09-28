@@ -24,42 +24,48 @@ from typing import Any
 
 import mlflow
 import numpy as np
+from fashion_seg_contract import request
 from mlflow.models import ModelSignature
 from mlflow.types import ColSpec, ParamSchema, ParamSpec, Schema
 
 import fashion_seg
 from fashion_seg.config import PackagedModel, Params
 from fashion_seg.ports import ModelFamily, ServingRequirements
-from fashion_seg.serving.pyfunc import (
-    DEFAULT_MIN_SCORE,
-    IMAGE_COLUMN,
-    FashionSegmentationModel,
-    encode_image,
-)
+from fashion_seg.serving.pyfunc import FashionSegmentationModel, encode_image
 from fashion_seg.tracking import setup_experiment
 
 SIGNATURE = ModelSignature(
-    inputs=Schema([ColSpec("string", IMAGE_COLUMN)]),
-    params=ParamSchema([ParamSpec("min_score", "double", DEFAULT_MIN_SCORE)]),
+    inputs=Schema([ColSpec("string", request.IMAGE_FIELD)]),
+    params=ParamSchema([ParamSpec(request.MIN_SCORE_PARAM, "double", request.DEFAULT_MIN_SCORE)]),
+)
+
+# What the serving wrapper itself needs, whatever the family: added to each family's own.
+WRAPPER_REQUIREMENTS = ServingRequirements(
+    pinned=("mlflow", "pydantic", "numpy", "pandas", "pillow"),
+    released=("fashion-seg-contract",),
 )
 
 
 def pip_requirements(requirements: ServingRequirements) -> list[str]:
-    """List a family's runtime requirements, pinned to what is installed.
+    """List a packaged model's runtime requirements, pinned to what is installed.
 
     Parameters
     ----------
     requirements : ServingRequirements
-        The family's serving requirements.
+        The family's serving requirements (its framework); the wrapper's are added.
 
     Returns
     -------
     list[str]
         pip requirement lines: options, pinned versions, released wheels by URL.
     """
-    pinned = [f"{pkg}=={version(pkg)}" for pkg in requirements.pinned]
-    released = [f"{pkg} @ {_installed_from(pkg)}" for pkg in requirements.released]
-    return [*requirements.pip_options, *pinned, *released]
+    pinned = [*WRAPPER_REQUIREMENTS.pinned, *requirements.pinned]
+    released = [*WRAPPER_REQUIREMENTS.released, *requirements.released]
+    return [
+        *requirements.pip_options,
+        *(f"{pkg}=={version(pkg)}" for pkg in pinned),
+        *(f"{pkg} @ {_installed_from(pkg)}" for pkg in released),
+    ]
 
 
 def _installed_from(name: str) -> str:
@@ -113,7 +119,7 @@ def input_example() -> dict[str, list[str]]:
     """
     rng = np.random.default_rng(0)
     image = rng.integers(0, 255, size=(64, 48, 3), dtype=np.uint8)
-    return {IMAGE_COLUMN: [encode_image(image)]}
+    return {request.IMAGE_FIELD: [encode_image(image)]}
 
 
 def package(family: ModelFamily, name: str, model: PackagedModel, params: Params) -> dict[str, Any]:

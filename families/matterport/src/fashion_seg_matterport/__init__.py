@@ -32,8 +32,8 @@ from fashion_seg.ports import (
 SPEC = FamilySpec(
     name="matterport",
     serving=ServingRequirements(
-        pinned=("mlflow", "pydantic", "tensorflow", "numpy", "pandas", "pillow"),
-        released=("fashion-seg-contract", "maskrcnn-matterport"),
+        pinned=("tensorflow",),
+        released=("maskrcnn-matterport",),
     ),
 )
 

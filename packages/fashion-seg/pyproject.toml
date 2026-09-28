@@ -11,6 +11,7 @@ dependencies = [
     "fashion-seg-contract",
     "mlflow>=3.16,<3.17",   # same minor version everywhere: every environment writes mlflow.db
     "numpy>=1.23",
+    "pandas>=2",   # the pyfunc interface: MLflow passes requests as DataFrames
     "pillow>=10",
     "polars>=1.20",
     "pycocotools>=2.0.8",
@@ -20,8 +21,9 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-# Released wheels, referenced by URL like packages from a registry (GitHub Releases).
-fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.1.0/fashion_seg_contract-0.1.0-py3-none-any.whl" }
+# Released wheels, referenced by URL like packages from a registry (GitHub Releases). The family
+# projects get this source from here (uv reads the sources of path dependencies).
+fashion-seg-contract = { url = "https://github.com/thibaudchevrier/fashion-seg-contract/releases/download/v0.2.0/fashion_seg_contract-0.2.0-py3-none-any.whl" }
 
 [build-system]
 requires = ["hatchling"]
