@@ -28,7 +28,11 @@ stages:
       - ${data.train_images}
       - ${data.label_file}
       - ${train.matterport.init_weights}
-      - families/matterport/src
+      # The family's training modules only: a serving change (predictor) keeps the training.
+      - families/matterport/src/fashion_seg_matterport/__init__.py
+      - families/matterport/src/fashion_seg_matterport/config.py
+      - families/matterport/src/fashion_seg_matterport/dataset.py
+      - families/matterport/src/fashion_seg_matterport/training.py
       - families/matterport/uv.lock
       - ${lib}/service/training.py
       - ${lib}/data
@@ -50,7 +54,12 @@ stages:
       - ${data.train_images}
       - ${data.label_file}
       - ${train.torchvision.init_weights}
-      - families/torchvision/src
+      # The family's training modules only: a serving change (predictor) keeps the training.
+      - families/torchvision/src/fashion_seg_torchvision/__init__.py
+      - families/torchvision/src/fashion_seg_torchvision/config.py
+      - families/torchvision/src/fashion_seg_torchvision/dataset.py
+      - families/torchvision/src/fashion_seg_torchvision/network.py
+      - families/torchvision/src/fashion_seg_torchvision/training.py
       - families/torchvision/uv.lock
       - ${lib}/service/training.py
       - ${lib}/data
