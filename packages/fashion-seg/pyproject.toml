@@ -29,3 +29,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/fashion_seg"]
+
+# Run from this directory in the root environment: make test-library.
+[tool.pytest.ini_options]
+# Docstring examples are tests too.
+testpaths = ["src", "tests"]
+addopts = "--doctest-modules"

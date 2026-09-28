@@ -58,10 +58,9 @@ arg-type-hints-in-docstring = true
 check-return-types = true
 
 [tool.pytest.ini_options]
-# Docstring examples are tests too. Each family runs its own tests in its environment
-# (make test-<family>).
-testpaths = ["packages/fashion-seg/src", "tests"]
-addopts = "--doctest-modules"
+# Repository-wide tests (architecture rules across the library and the families). The library
+# and each family run their own tests (make test-library, make test-<family>).
+testpaths = ["tests"]
 
 [tool.pylint.main]
 py-version = "3.12"

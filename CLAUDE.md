@@ -11,11 +11,11 @@ which [fashion-serving](https://github.com/thibaudchevrier/fashion-serving) impo
 
 | Path | Content | Environment (uv project) |
 |------|---------|------|
-| `packages/fashion-seg/` | `fashion_seg`: the shared library, framework-free (ports, config, data, workflow, scoring, serving wrapper, generic CLI) | installed in every environment |
+| `packages/fashion-seg/` | `fashion_seg`: the shared library, framework-free (ports, config, data, workflow, scoring, serving wrapper, generic CLI), and its tests | installed in every environment |
 | `families/torchvision/` | `fashion_seg_torchvision`: all the torchvision logic + its entrypoint | Python 3.12, PyTorch: trains, packages, evaluates |
 | `families/matterport/` | `fashion_seg_matterport`: all the Matterport logic + its entrypoint | Python 3.11, TensorFlow 2.15: trains |
 | `families/matterport/serve/` | Serving environment of the same package | Python 3.12, TensorFlow 2.18+: packages, evaluates |
-| `pyproject.toml` (root) | The repository: version (commitizen), DVC, lint, library tests, `prepare` | Python 3.12, no framework |
+| `pyproject.toml` (root) | The repository: version (commitizen), DVC, lint, architecture tests (`tests/`), `prepare` | Python 3.12, no framework |
 | `dvc.yaml`, `params.yaml`, `dvc.lock` | Pipeline stages (each names its environment), parameters, hashes | |
 
 ## Architecture: ports and adapters, one entrypoint per family
@@ -148,8 +148,9 @@ make hooks                    # once: install the pre-commit and commit-msg git 
 make format                   # ruff format + ruff --fix
 make lint                     # all pre-commit hooks on all files (exactly what CI runs)
 make test                     # every environment's tests, including docstring examples
-make test-core                # the library (root env); test-torchvision, test-matterport-train,
-                              # test-matterport-serve for the families
+make test-library             # the library (packages/fashion-seg/tests, doctests)
+make test-architecture        # dependency rules across the library and the families (tests/)
+                              # test-torchvision, test-matterport-train, test-matterport-serve
 make check                    # lint + test: run before every commit
 make prepare                  # dvc repro --single-item prepare
 make pull-sample              # a few images for smoke runs

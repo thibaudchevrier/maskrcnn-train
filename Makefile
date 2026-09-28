@@ -9,7 +9,7 @@ MLFLOW_PORT ?= 5002
 SAMPLE_IMAGES ?= 12
 export MLFLOW_DISABLE_AGENT_HINT = 1
 
-.PHONY: install hooks format lint test test-core test-torchvision test-matterport-train \
+.PHONY: install hooks format lint test test-architecture test-library test-torchvision test-matterport-train \
 	test-matterport-serve check mlflow-ui prepare pull-sample pull-val \
 	train-matterport-smoke train-torchvision-smoke evaluate-quick
 
@@ -30,10 +30,14 @@ lint:
 	uv run pre-commit run --all-files --show-diff-on-failure
 
 # Each environment runs its own tests (docstring examples included).
-test: test-core test-torchvision test-matterport-train test-matterport-serve
+test: test-architecture test-library test-torchvision test-matterport-train test-matterport-serve
 
-test-core:
+# Dependency rules across the library and every family (reads the source: root environment).
+test-architecture:
 	uv run pytest
+
+test-library:
+	cd packages/fashion-seg && uv run pytest -p no:warnings
 
 test-torchvision:
 	cd families/torchvision && uv run pytest -p no:warnings

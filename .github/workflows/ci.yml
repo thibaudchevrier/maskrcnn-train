@@ -48,7 +48,7 @@ jobs:
       fail-fast: false
       matrix:
         env:
-          - { name: "library", project: ".", target: test-core }
+          - { name: "library", project: ".", target: "test-architecture test-library" }
           - { name: "torchvision", project: families/torchvision, target: test-torchvision }
           - { name: "matterport training", project: families/matterport, target: test-matterport-train }
           - { name: "matterport serving", project: families/matterport/serve, target: test-matterport-serve }

@@ -50,7 +50,7 @@ repos:
         entry: uv run --no-sync pylint --disable=redefined-outer-name,unbalanced-tuple-unpacking
         language: system
         types: [python]
-        files: ^tests/
+        files: ^(tests|packages/fashion-seg/tests)/
       - id: pylint-torchvision
         name: pylint (families/torchvision)
         entry: >-
