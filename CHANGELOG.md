@@ -1,3 +1,9 @@
+## v0.2.0 (2026-09-28)
+
+### Feat
+
+- **evaluate**: COCO mAP of the packaged model on the validation split
+
 ## v0.1.1 (2026-09-27)
 
 ### Fix
