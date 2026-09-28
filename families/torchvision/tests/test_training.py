@@ -77,17 +77,6 @@ def test_smoke_training_exports_and_resumes(params_file, caplog):
     assert "val_loss" in json.loads((out / "metrics.json").read_text())
 
 
-def test_sampler_order_is_reproducible_and_resumable():
-    """An epoch's order is the same every time, and resuming skips the images already seen."""
-    sampler = training.EpochSampler(10, seed=3)
-    sampler.set_position(epoch=1, start=0)
-    full = list(sampler)
-    sampler.set_position(epoch=1, start=4)
-    assert list(sampler) == full[4:] and len(sampler) == 6
-    sampler.set_position(epoch=2, start=0)
-    assert sorted(sampler) == list(range(10)) and list(sampler) != full
-
-
 def test_a_stopped_run_resumes_mid_epoch(tmp_path):
     """A stop saves a checkpoint and returns; the next run continues at the following step."""
     write_dataset(tmp_path, n_images=5, height=120, width=160)

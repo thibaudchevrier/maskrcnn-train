@@ -1,15 +1,16 @@
-# The torchvision family: its code (src/fashion_seg_torchvision) and its environment, which trains,
-# packages and evaluates it: `uv run --project families/torchvision python -m fashion_seg_torchvision`.
+# The Mask2Former family: its code (src/fashion_seg_mask2former) and its environment, which trains,
+# packages and evaluates it: `uv run --project families/mask2former python -m fashion_seg_mask2former`.
 [project]
-name = "fashion-seg-torchvision"
+name = "fashion-seg-mask2former"
 version = "0.1.0"
-description = "torchvision Mask R-CNN v2 family of fashion-seg-train"
+description = "Mask2Former (Hugging Face transformers) family of fashion-seg-train"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fashion-seg",
     "fashion-seg-torch",
+    "scipy>=1.13",          # Hungarian matching of predictions to ground truth, in the loss
     "torch>=2.8",
-    "torchvision>=0.23",
+    "transformers>=4.50",
 ]
 
 [dependency-groups]
@@ -22,24 +23,22 @@ explicit = true
 
 [tool.uv.sources]
 fashion-seg = { path = "../../packages/fashion-seg", editable = true }
-fashion-seg-torch = { path = "../../packages/fashion-seg-torch", editable = true }
 fashion-seg-testing = { path = "../../packages/fashion-seg-testing", editable = true }
+fashion-seg-torch = { path = "../../packages/fashion-seg-torch", editable = true }
 # Linux (CI, Docker, cloud CPU): CPU-only PyTorch wheels, without ~2 GB of CUDA libraries.
-# macOS wheels include the Apple GPU (MPS) backend.
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
-torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/fashion_seg_torchvision"]
+packages = ["src/fashion_seg_mask2former"]
 
 [tool.pytest.ini_options]
 # Docstring examples are tests too.
 addopts = "--doctest-modules"
-testpaths = ["src", "tests", "../../packages/fashion-seg-torch/src", "../../packages/fashion-seg-torch/tests"]
+testpaths = ["src", "tests"]
 
 [tool.pylint.main]
 py-version = "3.12"
