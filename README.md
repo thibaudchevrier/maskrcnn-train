@@ -292,6 +292,4 @@ Testing):
 1. **Generic `package` stage**: package the best evaluated model (not only the 2021 one) and mark it
    `@champion` in the MLflow registry; CI comments `dvc metrics diff` on the PR.
 2. **torchvision trainer** (`trainers/torchvision/`, PyTorch, runs on Apple Silicon GPUs).
-3. **2021 model anchors**: its exported `config.json` uses anchor scales 32–512 while it was trained
-   with 16–256. On 200 validation images, correcting them raises mask mAP from 0.025 to 0.039.
-4. **Augmentation** for the Matterport trainer (imgaug is unmaintained; needs a compatible substitute).
+3. **Augmentation** for the Matterport trainer (imgaug is unmaintained; needs a compatible substitute).

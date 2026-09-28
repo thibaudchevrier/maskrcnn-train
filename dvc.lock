@@ -9,14 +9,14 @@ stages:
       size: 39023
     - path: deployement
       hash: md5
-      md5: d2814262190bed9dfca1b3ab6b925c2c.dir
-      size: 265710486
+      md5: d94d8cc1b1efbccb059ae08f6b077148.dir
+      size: 265710485
       nfiles: 4
     - path: src/fashion_seg
       hash: md5
-      md5: a9ce474a13bd42b8268ebc825a9d5b67.dir
-      size: 17196
-      nfiles: 8
+      md5: c185d633c689decf6ec2fd5e64cc2be7.dir
+      size: 32380
+      nfiles: 9
     params:
       params.yaml:
         legacy_model:
@@ -38,9 +38,9 @@ stages:
     outs:
     - path: models/fashion-maskrcnn
       hash: md5
-      md5: 15877952ee76028eae2442fc48d88e0a.dir
-      size: 266110504
-      nfiles: 24
+      md5: d0f771fe5f266f8259c02e2b6f2bf1ea.dir
+      size: 266128543
+      nfiles: 25
   prepare:
     cmd: python -m fashion_seg.prepare
     deps:
