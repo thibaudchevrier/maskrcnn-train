@@ -1,3 +1,10 @@
+## v0.5.0 (2026-09-28)
+
+### Feat
+
+- stop and resume the training of every model family
+- **torchvision**: stop and resume training at any step
+
 ## v0.4.2 (2026-09-28)
 
 ### Refactor
