@@ -35,7 +35,7 @@ isolation.environment()  # before anything imports Ultralytics
 SPEC = FamilySpec(
     name="yolo",
     serving=ServingRequirements(
-        pinned=("torch", "ultralytics"),
+        pinned=("torch", "torchvision", "ultralytics"),
         # CPU-only PyTorch wheels on Linux, as in families/yolo/pyproject.toml (the default ones
         # bundle CUDA).
         pip_options=("--extra-index-url https://download.pytorch.org/whl/cpu",),

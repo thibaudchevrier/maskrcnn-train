@@ -10,6 +10,9 @@ dependencies = [
     "fashion-seg",
     "fashion-seg-torch",
     "torch>=2.8",
+    # Ultralytics' NMS: a direct dependency so that Linux gets the CPU build matching torch
+    # (uv applies [tool.uv.sources] to direct dependencies only).
+    "torchvision>=0.23",
     "ultralytics>=8.3",
 ]
 
