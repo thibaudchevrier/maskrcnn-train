@@ -49,7 +49,7 @@ imports and serves.
 | `models/fashion-maskrcnn/` | **Build output**: the packaged 2021 model, the one fashion-serving imports today | DVC (`package_legacy` stage) |
 | `models/fashion-maskrcnn-torchvision/` | **Build output**: the packaged torchvision model | DVC (`package_torchvision` stage) |
 | `metrics/` | Evaluation scores of each packaged model | git (`evaluate_<model>` stage) |
-| `mlflow.db`, `mlartifacts/` | Local MLflow tracking store | not versioned |
+| `mlflow.db`, `mlartifacts/` | Local MLflow tracking store (runs, curves, registry) | DVC (`mlflow.db.dvc`, `mlartifacts.dvc`), snapshot with `make mlflow-snapshot` |
 
 The deployed model is still the 2021 one, re-packaged: TensorFlow 2.21 loads its SavedModel, and
 maskrcnn-matterport's `mrcnn.serving` runs it with Matterport's own pre/post-processing. Models
@@ -256,10 +256,21 @@ make mlflow-ui    # http://localhost:5002 (Ctrl+C to stop; MLFLOW_PORT=... to ch
 - **Models → `fashion-maskrcnn`**: registered versions. The packaged one is recorded in
   `models/fashion-maskrcnn/provenance.json`.
 
-No Docker or server is needed: the UI reads `mlflow.db` and `mlartifacts/` directly. A shared tracking
-server becomes useful once runs come from several machines (e.g. training on a cloud GPU): start one
-and set `MLFLOW_TRACKING_URI`. All environments pin the same MLflow version (3.16) because they
-write to the same store.
+No Docker or server is needed: the UI reads `mlflow.db` and `mlartifacts/` directly. All
+environments pin the same MLflow version (3.16) because they write to the same store.
+
+The store is versioned by DVC, so the experiment history survives the machine. After a training,
+packaging or evaluation, snapshot it and commit the pointers with the PR:
+
+```bash
+make mlflow-snapshot   # when no training, packaging or evaluation is writing to the store
+git add mlflow.db.dvc mlartifacts.dvc
+```
+
+`uv run dvc pull mlflow.db.dvc mlartifacts.dvc` restores it: runs, parameters, metric curves and
+the registry come back anywhere; artifact downloads also need the repository at the same path,
+since MLflow records absolute artifact paths. A single file store fits one machine: once runs come
+from several (e.g. a cloud GPU), use a shared tracking server and set `MLFLOW_TRACKING_URI`.
 
 There is no 2021 training history in MLflow: the Colab notebook logged to TensorBoard, in Google Drive
 under `Final_project/model/train_results` (outside DVC).
@@ -272,6 +283,21 @@ Python and framework, a package `fashion_seg_<name>` implementing `ports.ModelFa
 entrypoint calling `main(fashion_seg_<name>)`, a `train.<name>` section and a `models.<name>`
 entry in `params.yaml`, and its `train_`, `package_` and `evaluate_` stages. The library doesn't
 change.
+
+## Results
+
+Scores of each packaged model on the whole validation split (5,703 images), COCO metrics
+computed by the `evaluate_<model>` stages (`uv run dvc metrics show`; per-class AP in MLflow,
+experiment `fashion-seg-evaluation`):
+
+| Model | Registry version | mask mAP | mask AP50 | box mAP | s / image |
+|-------|------------------|----------|-----------|---------|-----------|
+| 2021 Matterport Mask R-CNN (`legacy`) | 15 | 0.035 | 0.065 | 0.043 | 1.33 (CPU) |
+| torchvision Mask R-CNN v2, 1 epoch (`torchvision`) | 17 | **0.264** | **0.394** | **0.302** | 0.87 (Apple GPU) |
+
+After one epoch (~5.3 h on an M4 Pro), torchvision is 7.6x better on masks. Large, frequent
+garments score well (dress 0.77, pants 0.76, sleeve 0.67); rare classes and small scattered
+details (rivets, sequins, fringes, tassels) stay near 0.
 
 ## Model contract
 
@@ -361,8 +387,7 @@ Testing):
 
 ## Roadmap
 
-1. **First torchvision training** (1 epoch, ~5 h on the Apple GPU) and its evaluation against the
-   2021 baseline.
+1. **More torchvision epochs**, and the rare classes (more data or re-weighting).
 2. **Promotion**: mark the best evaluated model `@champion` in the MLflow registry and serve it;
    CI comments `dvc metrics diff` on the PR.
 3. **Pre-resized images** (a `prepare` output at 1024 px) to speed up data loading.

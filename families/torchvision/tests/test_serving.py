@@ -17,7 +17,7 @@ from fashion_seg.service.packaging import package
 from fashion_seg.serving.response import encode_image
 from fashion_seg_testing import write_params
 from fashion_seg_torchvision.network import build_model
-from fashion_seg_torchvision.predictor import TorchvisionPredictor
+from fashion_seg_torchvision.predictor import TorchvisionPredictor, full_size_masks
 
 
 @pytest.fixture
@@ -45,6 +45,30 @@ def test_predictor_returns_detections_in_image_coordinates(export_dir):
     assert detections.boxes.shape == (n, 4) and detections.scores.shape == (n,)
     assert detections.masks.shape == (50, 40, n) and detections.masks.dtype == bool
     assert (detections.boxes[:, [0, 2]] <= 50).all() and (detections.boxes[:, [1, 3]] <= 40).all()
+
+
+def test_large_images_are_shrunk_and_masks_come_back_at_full_size(export_dir):
+    """A photo much larger than max_size gives masks and boxes at the photo's exact size."""
+    image = np.random.default_rng(2).integers(0, 255, (1201, 899, 3), dtype=np.uint8)
+    predictor = TorchvisionPredictor(export_dir, device="cpu")
+    detections = predictor.predict(image)
+    n = len(detections.class_ids)
+    assert detections.masks.shape == (1201, 899, n) and detections.masks.dtype == bool
+    assert (detections.boxes[:, [0, 2]] <= 1201).all() and (
+        detections.boxes[:, [1, 3]] <= 899
+    ).all()
+
+
+def test_masks_are_pasted_inside_their_box():
+    """Upscaled masks stay inside their box, at the image's exact size."""
+    probs = np.zeros((2, 10, 7), np.float32)
+    probs[0, 2:6, 1:5] = 1.0
+    probs[1] = 1.0  # a mask covering the whole shrunk image...
+    boxes = np.array([[6, 3, 18, 15], [0, 0, 4, 4]], np.int32)  # ...but a small box
+    masks = full_size_masks(probs, boxes, (31, 22))
+    assert masks.shape == (31, 22, 2)
+    assert masks[:, :, 1].sum() == 16 and masks[:4, :4, 1].all()
+    assert not masks[:6, :, 0].any() and masks[6:18, 3:15, 0].any()
 
 
 def test_packaged_torchvision_model_follows_the_contract(export_dir, tmp_path, monkeypatch):

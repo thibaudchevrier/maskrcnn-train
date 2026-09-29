@@ -133,7 +133,9 @@ framework allows (use `fashion_seg.progress.epoch_order` for a reproducible orde
   `evaluate` stage only (COCO mAP of the packaged model on the val split), never with training
   losses.
 - **MLflow**: experiments and the registered model name are in `params.yaml:tracking`. Every
-  environment pins the same MLflow minor version (they share `mlflow.db`).
+  environment pins the same MLflow minor version (they share `mlflow.db`). The store is versioned by
+  DVC: after a training, packaging or evaluation, `make mlflow-snapshot` (when nothing is writing to
+  it) and commit `mlflow.db.dvc` / `mlartifacts.dvc` with the PR.
 - **Environments**: the library's dependencies (`packages/fashion-seg/pyproject.toml`) stay
   framework-free and install on Python 3.11 and 3.12; frameworks go in the family's project. Its
   version is fixed (not the repository's): family lock files record it, so bump it only with its
