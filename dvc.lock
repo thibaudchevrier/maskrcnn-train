@@ -50,13 +50,13 @@ stages:
       size: 1437924420
     - path: packages/fashion-seg/src/fashion_seg/data
       hash: md5
-      md5: e29740bfd07484dd4a8f5f930c6d4f1f.dir
-      size: 5740
-      nfiles: 3
+      md5: df66db884d5a0491fb9134ada9acc248.dir
+      size: 8116
+      nfiles: 4
     - path: packages/fashion-seg/src/fashion_seg/service/preparation.py
       hash: md5
-      md5: f461e5925c78bb049407a994e455f7b3
-      size: 1619
+      md5: 99ee955285eb3123ed46d67e6736e0df
+      size: 1215
     params:
       params.yaml:
         data.prepared_dir: prepared
@@ -116,3 +116,215 @@ stages:
       md5: 47b3dc51267706bf373f53e5d9cede8f.dir
       size: 266359681
       nfiles: 44
+  train_torchvision:
+    cmd: uv run --project families/torchvision --locked python -m 
+      fashion_seg_torchvision train
+    deps:
+    - path: data/imaterialist/label_descriptions.json
+      hash: md5
+      md5: d8479cd45c24bbd73285daa5a924777d
+      size: 39023
+    - path: data/imaterialist/train
+      hash: md5
+      md5: 9de59df5cd2aba41825c35348f849841.dir
+      size: 20520634573
+      nfiles: 45623
+    - path: families/torchvision/src/fashion_seg_torchvision/__init__.py
+      hash: md5
+      md5: 1e514fbead5f8fe458204cd48aff17d5
+      size: 2829
+    - path: families/torchvision/src/fashion_seg_torchvision/config.py
+      hash: md5
+      md5: 89f2d71c7596fbcce01f3b883a63e361
+      size: 1582
+    - path: families/torchvision/src/fashion_seg_torchvision/dataset.py
+      hash: md5
+      md5: 80c5051b81cc08d5133448108e06eba9
+      size: 4971
+    - path: families/torchvision/src/fashion_seg_torchvision/network.py
+      hash: md5
+      md5: 25c6744425b2abb489455192eb214e2d
+      size: 3043
+    - path: families/torchvision/src/fashion_seg_torchvision/training.py
+      hash: md5
+      md5: 5fac5f2e6765110ccf5d08edd309a0ac
+      size: 16739
+    - path: families/torchvision/uv.lock
+      hash: md5
+      md5: f63a6bcb4e86218fa78d8c98ee15632c
+      size: 206704
+    - path: packages/fashion-seg/src/fashion_seg/data
+      hash: md5
+      md5: df66db884d5a0491fb9134ada9acc248.dir
+      size: 8116
+      nfiles: 4
+    - path: packages/fashion-seg/src/fashion_seg/service/training.py
+      hash: md5
+      md5: 3cfc7c8ea693640c92b85fd53b763432
+      size: 5528
+    - path: prepared
+      hash: md5
+      md5: d3b65f71823b250f9188c1ab309085c4.dir
+      size: 587736028
+      nfiles: 2
+    - path: weights/maskrcnn_resnet50_fpn_v2_coco.pth
+      hash: md5
+      md5: 93719a2395e516611c7b392cb0037ae3
+      size: 185828065
+    params:
+      params.yaml:
+        data:
+          train_csv: data/imaterialist/train.csv
+          train_images: data/imaterialist/train
+          label_file: data/imaterialist/label_descriptions.json
+          prepared_dir: prepared
+        split:
+          n_folds: 8
+          fold: 0
+          seed: 42
+        train.torchvision:
+          output_dir: outputs/torchvision
+          init_weights: weights/maskrcnn_resnet50_fpn_v2_coco.pth
+          epochs: 1
+          max_train_images:
+          max_val_images: 500
+          min_size: 800
+          max_size: 1024
+          batch_size: 2
+          learning_rate: 0.0025
+          momentum: 0.9
+          weight_decay: 0.0001
+          warmup_steps: 1000
+          num_workers: 4
+          log_every: 50
+          checkpoint_every: 500
+          seed: 0
+          device: auto
+          resume: true
+    outs:
+    - path: outputs/torchvision/metrics.json
+      hash: md5
+      md5: 08aebf24e4094ee97ca10edb79e5d641
+      size: 259
+    - path: outputs/torchvision/model
+      hash: md5
+      md5: 15956b00faa0d908aa7d01a10decf940.dir
+      size: 184846595
+      nfiles: 2
+  package_torchvision:
+    cmd: uv run --project families/torchvision --locked python -m 
+      fashion_seg_torchvision package torchvision
+    deps:
+    - path: data/imaterialist/label_descriptions.json
+      hash: md5
+      md5: d8479cd45c24bbd73285daa5a924777d
+      size: 39023
+    - path: families/torchvision/src
+      hash: md5
+      md5: 8615adaf53c32cc5294141e5ca51920c.dir
+      size: 35912
+      nfiles: 7
+    - path: families/torchvision/uv.lock
+      hash: md5
+      md5: f63a6bcb4e86218fa78d8c98ee15632c
+      size: 206704
+    - path: outputs/torchvision/model
+      hash: md5
+      md5: 15956b00faa0d908aa7d01a10decf940.dir
+      size: 184846595
+      nfiles: 2
+    - path: packages/fashion-seg/src/fashion_seg
+      hash: md5
+      md5: a0b3941f34a7a96f9ef6f85b91b0da1a.dir
+      size: 84135
+      nfiles: 23
+    params:
+      params.yaml:
+        models.torchvision:
+          family: torchvision
+          source: outputs/torchvision/model
+          output_dir: models/fashion-maskrcnn-torchvision
+        tracking.packaging_experiment: fashion-maskrcnn
+        tracking.registered_name: fashion-maskrcnn
+    outs:
+    - path: models/fashion-maskrcnn-torchvision
+      hash: md5
+      md5: 8855c8fe6e51b4cf36a0f19cbc3c3beb.dir
+      size: 185321966
+      nfiles: 44
+  evaluate_legacy:
+    cmd: uv run --project families/matterport/serve --locked python -m 
+      fashion_seg_matterport evaluate legacy
+    deps:
+    - path: models/fashion-maskrcnn
+      hash: md5
+      md5: 76552d0617dcb91d353e8c858ccd17eb.dir
+      size: 266159841
+      nfiles: 43
+    - path: packages/fashion-seg/src/fashion_seg/scoring.py
+      hash: md5
+      md5: c0d982f52cc34e7ec57e4dfc1f37a6ff
+      size: 8584
+    - path: packages/fashion-seg/src/fashion_seg/service/evaluation.py
+      hash: md5
+      md5: 3185d96b7ae99011bd18cf7eb6dca7c6
+      size: 8394
+    - path: prepared
+      hash: md5
+      md5: d3b65f71823b250f9188c1ab309085c4.dir
+      size: 587736028
+      nfiles: 2
+    params:
+      params.yaml:
+        data.label_file: data/imaterialist/label_descriptions.json
+        data.prepared_dir: prepared
+        data.train_images: data/imaterialist/train
+        evaluate:
+          split: val
+          max_images:
+          min_score: 0.0
+          output_dir: metrics
+        tracking.evaluation_experiment: fashion-seg-evaluation
+    outs:
+    - path: metrics/evaluate-legacy.json
+      hash: md5
+      md5: dd6ebc8aaa30af8139feea9d7d391544
+      size: 374
+  evaluate_torchvision:
+    cmd: uv run --project families/torchvision --locked python -m 
+      fashion_seg_torchvision evaluate torchvision
+    deps:
+    - path: models/fashion-maskrcnn-torchvision
+      hash: md5
+      md5: 8855c8fe6e51b4cf36a0f19cbc3c3beb.dir
+      size: 185321966
+      nfiles: 44
+    - path: packages/fashion-seg/src/fashion_seg/scoring.py
+      hash: md5
+      md5: c0d982f52cc34e7ec57e4dfc1f37a6ff
+      size: 8584
+    - path: packages/fashion-seg/src/fashion_seg/service/evaluation.py
+      hash: md5
+      md5: 3185d96b7ae99011bd18cf7eb6dca7c6
+      size: 8394
+    - path: prepared
+      hash: md5
+      md5: d3b65f71823b250f9188c1ab309085c4.dir
+      size: 587736028
+      nfiles: 2
+    params:
+      params.yaml:
+        data.label_file: data/imaterialist/label_descriptions.json
+        data.prepared_dir: prepared
+        data.train_images: data/imaterialist/train
+        evaluate:
+          split: val
+          max_images:
+          min_score: 0.0
+          output_dir: metrics
+        tracking.evaluation_experiment: fashion-seg-evaluation
+    outs:
+    - path: metrics/evaluate-torchvision.json
+      hash: md5
+      md5: ebcec59f3b7ffd2697b8b4d38c5edc72
+      size: 368

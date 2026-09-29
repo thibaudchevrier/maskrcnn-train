@@ -273,6 +273,21 @@ entrypoint calling `main(fashion_seg_<name>)`, a `train.<name>` section and a `m
 entry in `params.yaml`, and its `train_`, `package_` and `evaluate_` stages. The library doesn't
 change.
 
+## Results
+
+Scores of each packaged model on the whole validation split (5,703 images), COCO metrics
+computed by the `evaluate_<model>` stages (`uv run dvc metrics show`; per-class AP in MLflow,
+experiment `fashion-seg-evaluation`):
+
+| Model | Registry version | mask mAP | mask AP50 | box mAP | s / image |
+|-------|------------------|----------|-----------|---------|-----------|
+| 2021 Matterport Mask R-CNN (`legacy`) | 15 | 0.035 | 0.065 | 0.043 | 1.33 (CPU) |
+| torchvision Mask R-CNN v2, 1 epoch (`torchvision`) | 17 | **0.264** | **0.394** | **0.302** | 0.87 (Apple GPU) |
+
+After one epoch (~5.3 h on an M4 Pro), torchvision is 7.6x better on masks. Large, frequent
+garments score well (dress 0.77, pants 0.76, sleeve 0.67); rare classes and small scattered
+details (rivets, sequins, fringes, tassels) stay near 0.
+
 ## Model contract
 
 `models/fashion-maskrcnn` is a standard MLflow model: anything that can run `mlflow models serve`
@@ -361,8 +376,7 @@ Testing):
 
 ## Roadmap
 
-1. **First torchvision training** (1 epoch, ~5 h on the Apple GPU) and its evaluation against the
-   2021 baseline.
+1. **More torchvision epochs**, and the rare classes (more data or re-weighting).
 2. **Promotion**: mark the best evaluated model `@champion` in the MLflow registry and serve it;
    CI comments `dvc metrics diff` on the PR.
 3. **Pre-resized images** (a `prepare` output at 1024 px) to speed up data loading.
