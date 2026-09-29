@@ -1,9 +1,12 @@
 """Tests of the data modules: per-image annotations and the frozen split."""
 
+import numpy as np
 import polars as pl
 import pytest
+from fashion_seg_contract import rle
+from PIL import Image
 
-from fashion_seg.data import annotations, files
+from fashion_seg.data import annotations, files, images
 from fashion_seg.data.split import split_image_ids
 
 
@@ -66,3 +69,22 @@ def test_select_ids_keeps_local_images_then_limits(tmp_path):
     ids = ["a", "b", "c", "d"]
     assert files.select_ids(ids, tmp_path, limit=2, local_only=True) == ["b", "c"]
     assert files.select_ids(ids, tmp_path) == ids
+
+
+def test_load_example_downscales_image_and_masks_together(tmp_path):
+    """The image and its masks are downscaled to max_side; categories become model classes."""
+    Image.new("RGB", (200, 100), (10, 20, 30)).save(tmp_path / "a.jpg")
+    mask = np.zeros((100, 200), bool)
+    mask[20:60, 40:120] = True
+    row = {
+        "image_id": "a",
+        "height": 100,
+        "width": 200,
+        "class_ids": [4],
+        "rles": [rle.encode(mask)],
+    }
+    example = images.load_example(row, tmp_path, max_side=50)
+    assert example.image.shape == (25, 50, 3)
+    assert example.labels == [5]
+    [small] = example.masks
+    assert small.shape == (25, 50) and small.sum() == 10 * 20

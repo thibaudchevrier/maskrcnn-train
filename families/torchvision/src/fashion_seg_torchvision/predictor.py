@@ -12,10 +12,10 @@ from typing import Any
 
 import numpy as np
 import torch
+from fashion_seg_torch.device import pick_device
 from PIL import Image
 
 from fashion_seg.ports import Detections
-from fashion_seg_torch.device import pick_device
 from fashion_seg_torchvision.network import build_model, to_tensor
 
 MASK_THRESHOLD = 0.5

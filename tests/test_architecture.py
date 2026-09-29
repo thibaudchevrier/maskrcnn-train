@@ -74,10 +74,12 @@ def test_library_modules_respect_the_dependency_rules(path):
     ids=lambda p: str(p.relative_to(ROOT / "families")),
 )
 def test_families_only_use_the_ports(path):
-    """A family uses the library's config, ports, progress (entrypoint: CLI); never MLflow."""
+    """A family uses the library's config, data, ports, progress (entrypoint: CLI); no MLflow."""
     imports = _imports(path)
     library = {name.split(".")[1] for name in imports if name.startswith("fashion_seg.")}
-    allowed = {"config", "ports", "progress"} | ({"cli"} if path.name == "__main__.py" else set())
+    allowed = {"config", "data", "ports", "progress"} | (
+        {"cli"} if path.name == "__main__.py" else set()
+    )
     assert library <= allowed, f"imports fashion_seg.{library - allowed}"
     own = path.parts[path.parts.index("src") + 1]
     assert not _roots(imports) & (FAMILY_PACKAGES - {own})
