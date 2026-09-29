@@ -8,7 +8,7 @@
 # Logs of background runs (make train, pulls, MLflow UI)
 /outputs/*.log
 
-# Local MLflow tracking (experiments are logged here, the chosen model is exported to DVC)
+# Local MLflow tracking store: versioned by DVC (mlflow.db.dvc, mlartifacts.dvc, make mlflow-snapshot)
 /mlflow.db
 /mlartifacts
 # MLflow's default store when no tracking URI is set: never the project's

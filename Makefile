@@ -12,7 +12,7 @@ export MLFLOW_DISABLE_AGENT_HINT = 1
 .PHONY: install hooks format lint test test-architecture test-library test-torchvision test-matterport-train \
 	test-matterport-serve check mlflow-ui prepare pull-sample pull-val \
 	train-matterport-smoke train-torchvision-smoke evaluate-quick \
-	train train-log train-stop
+	train train-log train-stop mlflow-snapshot
 
 install:
 	uv sync --locked
@@ -50,6 +50,12 @@ test-matterport-serve:
 	cd families/matterport && TF_CPP_MIN_LOG_LEVEL=3 uv run --project serve pytest -p no:warnings tests/serve
 
 check: lint test
+
+# Version the MLflow store (runs, curves, registry) with DVC and upload it; commit the two .dvc
+# pointers afterwards. Run it when no training, packaging or evaluation is writing to it.
+mlflow-snapshot:
+	uv run dvc add mlflow.db mlartifacts
+	uv run dvc push mlflow.db.dvc mlartifacts.dvc
 
 # Local experiment tracking UI (runs + model registry). Ctrl+C to stop.
 mlflow-ui:

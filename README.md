@@ -49,7 +49,7 @@ imports and serves.
 | `models/fashion-maskrcnn/` | **Build output**: the packaged 2021 model, the one fashion-serving imports today | DVC (`package_legacy` stage) |
 | `models/fashion-maskrcnn-torchvision/` | **Build output**: the packaged torchvision model | DVC (`package_torchvision` stage) |
 | `metrics/` | Evaluation scores of each packaged model | git (`evaluate_<model>` stage) |
-| `mlflow.db`, `mlartifacts/` | Local MLflow tracking store | not versioned |
+| `mlflow.db`, `mlartifacts/` | Local MLflow tracking store (runs, curves, registry) | DVC (`mlflow.db.dvc`, `mlartifacts.dvc`), snapshot with `make mlflow-snapshot` |
 
 The deployed model is still the 2021 one, re-packaged: TensorFlow 2.21 loads its SavedModel, and
 maskrcnn-matterport's `mrcnn.serving` runs it with Matterport's own pre/post-processing. Models
@@ -256,10 +256,21 @@ make mlflow-ui    # http://localhost:5002 (Ctrl+C to stop; MLFLOW_PORT=... to ch
 - **Models → `fashion-maskrcnn`**: registered versions. The packaged one is recorded in
   `models/fashion-maskrcnn/provenance.json`.
 
-No Docker or server is needed: the UI reads `mlflow.db` and `mlartifacts/` directly. A shared tracking
-server becomes useful once runs come from several machines (e.g. training on a cloud GPU): start one
-and set `MLFLOW_TRACKING_URI`. All environments pin the same MLflow version (3.16) because they
-write to the same store.
+No Docker or server is needed: the UI reads `mlflow.db` and `mlartifacts/` directly. All
+environments pin the same MLflow version (3.16) because they write to the same store.
+
+The store is versioned by DVC, so the experiment history survives the machine. After a training,
+packaging or evaluation, snapshot it and commit the pointers with the PR:
+
+```bash
+make mlflow-snapshot   # when no training, packaging or evaluation is writing to the store
+git add mlflow.db.dvc mlartifacts.dvc
+```
+
+`uv run dvc pull mlflow.db.dvc mlartifacts.dvc` restores it: runs, parameters, metric curves and
+the registry come back anywhere; artifact downloads also need the repository at the same path,
+since MLflow records absolute artifact paths. A single file store fits one machine: once runs come
+from several (e.g. a cloud GPU), use a shared tracking server and set `MLFLOW_TRACKING_URI`.
 
 There is no 2021 training history in MLflow: the Colab notebook logged to TensorBoard, in Google Drive
 under `Final_project/model/train_results` (outside DVC).
