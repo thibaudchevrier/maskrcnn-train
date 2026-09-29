@@ -1,2 +1,3 @@
 /mask_rcnn_coco.h5
 /maskrcnn_resnet50_fpn_v2_coco.pth
+/yolo11s-seg.pt

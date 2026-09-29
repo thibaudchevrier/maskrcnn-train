@@ -1,0 +1,13 @@
+md5: 28de5b4fd9400fc23c9293ec5dbf4ebc
+frozen: true
+deps:
+- checksum: '"0x8DCE251848BB91F"'
+  size: 20669228
+  hash: md5
+  path: 
+    https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s-seg.pt
+outs:
+- md5: 0a0febcb560f334cb78ae8922382bf74
+  size: 20669228
+  hash: md5
+  path: yolo11s-seg.pt
