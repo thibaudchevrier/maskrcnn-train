@@ -48,7 +48,7 @@ train:
   torchvision:
     output_dir: outputs/torchvision
     init_weights: weights/maskrcnn_resnet50_fpn_v2_coco.pth
-    epochs: 1
+    epochs: 4                 # resumed from the 1-epoch run: the cosine schedule restarts over 4
     max_train_images: null    # null = all
     max_val_images: 500       # validation loss each epoch on a subset (mAP: evaluate stage)
     min_size: 800
