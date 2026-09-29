@@ -1,0 +1,13 @@
+md5: f476e59ccbed4d59abbac096d1f01aba
+frozen: true
+deps:
+- checksum: '"2bb41b57f23e05dc2ba94c33e56e00053df67cd23ee22ce75c83855a2de3cea7"'
+  size: 189998168
+  hash: md5
+  path: 
+    https://huggingface.co/facebook/mask2former-swin-tiny-coco-instance/resolve/main/model.safetensors
+outs:
+- md5: 424117b3a9e0af0386b8180a2d0e4a53
+  size: 189998168
+  hash: md5
+  path: model.safetensors
