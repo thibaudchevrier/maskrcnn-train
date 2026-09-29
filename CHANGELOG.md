@@ -1,3 +1,22 @@
+## v0.7.0 (2026-09-29)
+
+### Feat
+
+- **pipeline**: train, package and evaluate Mask2Former and YOLO
+- **yolo**: YOLO11 segmentation family (Ultralytics)
+- **mask2former**: Mask2Former family (Swin-Tiny, Hugging Face transformers)
+
+### Fix
+
+- **yolo**: CPU torchvision on Linux, matching torch
+- **packaging**: bundle the shared packages a family's predictor imports
+
+### Refactor
+
+- **data**: share the box conversion of predicted boxes
+- **data**: shared image loading for every family's dataset
+- **torch**: shared PyTorch training loop for the families
+
 ## v0.6.0 (2026-09-29)
 
 ### Feat
