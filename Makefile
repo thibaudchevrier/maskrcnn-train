@@ -2,6 +2,8 @@
 #   uv run --project <env> python -m fashion_seg_<family> train | package <model> | evaluate <model>
 # `lint` runs the pre-commit hooks on every file: the same checks as the git hooks and CI.
 TORCHVISION = uv run --project families/torchvision
+MASK2FORMER = uv run --project families/mask2former
+YOLO = uv run --project families/yolo
 MATTERPORT_TRAIN = TF_CPP_MIN_LOG_LEVEL=3 uv run --project families/matterport
 MATTERPORT_SERVE = TF_CPP_MIN_LOG_LEVEL=3 uv run --project families/matterport/serve
 # 5000 is taken by AirPlay on macOS, 5001 by fashion-serving's inference service.
@@ -9,14 +11,16 @@ MLFLOW_PORT ?= 5002
 SAMPLE_IMAGES ?= 12
 export MLFLOW_DISABLE_AGENT_HINT = 1
 
-.PHONY: install hooks format lint test test-architecture test-library test-torchvision test-matterport-train \
-	test-matterport-serve check mlflow-ui prepare pull-sample pull-val \
-	train-matterport-smoke train-torchvision-smoke evaluate-quick \
+.PHONY: install hooks format lint test test-architecture test-library test-torchvision test-mask2former \
+	test-yolo test-matterport-train test-matterport-serve check mlflow-ui prepare pull-sample pull-val \
+	train-matterport-smoke train-torchvision-smoke train-mask2former-smoke train-yolo-smoke evaluate-quick \
 	train train-log train-stop mlflow-snapshot
 
 install:
 	uv sync --locked
 	uv sync --locked --project families/torchvision
+	uv sync --locked --project families/mask2former
+	uv sync --locked --project families/yolo
 	uv sync --locked --project families/matterport
 	uv sync --locked --project families/matterport/serve
 
@@ -31,7 +35,8 @@ lint:
 	uv run pre-commit run --all-files --show-diff-on-failure
 
 # Each environment runs its own tests (docstring examples included).
-test: test-architecture test-library test-torchvision test-matterport-train test-matterport-serve
+test: test-architecture test-library test-torchvision test-mask2former test-yolo test-matterport-train \
+	test-matterport-serve
 
 # Dependency rules across the library and every family (reads the source: root environment).
 test-architecture:
@@ -40,8 +45,15 @@ test-architecture:
 test-library:
 	cd packages/fashion-seg && uv run pytest -p no:warnings
 
+# Also runs the tests of the shared PyTorch loop (packages/fashion-seg-torch).
 test-torchvision:
 	cd families/torchvision && uv run pytest -p no:warnings
+
+test-mask2former:
+	cd families/mask2former && uv run pytest -p no:warnings
+
+test-yolo:
+	cd families/yolo && uv run pytest -p no:warnings
 
 test-matterport-train:
 	cd families/matterport && TF_CPP_MIN_LOG_LEVEL=3 uv run pytest -p no:warnings
@@ -78,6 +90,12 @@ pull-val:
 train-torchvision-smoke:
 	$(TORCHVISION) python -m fashion_seg_torchvision train --smoke
 
+train-mask2former-smoke:
+	$(MASK2FORMER) python -m fashion_seg_mask2former train --smoke
+
+train-yolo-smoke:
+	$(YOLO) python -m fashion_seg_yolo train --smoke
+
 train-matterport-smoke:
 	$(MATTERPORT_TRAIN) python -m fashion_seg_matterport train --smoke
 
@@ -96,13 +114,15 @@ train-log:
 
 # SIGINT to the Python process only (not its uv and DVC parents): it saves, then exits.
 train-stop:
-	pkill -INT -f "^[^ ]*python[0-9.]* -m fashion_seg_(torchvision|matterport) train" \
+	pkill -INT -f "^[^ ]*python[0-9.]* -m fashion_seg_(torchvision|mask2former|yolo|matterport) train" \
 		|| echo "No training running."
 
 # Score a packaged model on the first 200 pulled val images, in its family's environment
-# (not tracked by DVC, no registry tags): make evaluate-quick MODEL=legacy|torchvision
+# (not tracked by DVC, no registry tags): make evaluate-quick MODEL=legacy|torchvision|mask2former|yolo
 MODEL ?= legacy
 EVALUATE_legacy = $(MATTERPORT_SERVE) python -m fashion_seg_matterport
 EVALUATE_torchvision = $(TORCHVISION) python -m fashion_seg_torchvision
+EVALUATE_mask2former = $(MASK2FORMER) python -m fashion_seg_mask2former
+EVALUATE_yolo = $(YOLO) python -m fashion_seg_yolo
 evaluate-quick:
 	$(EVALUATE_$(MODEL)) evaluate $(MODEL) --max-images 200 --output metrics/evaluate-$(MODEL)-quick.json

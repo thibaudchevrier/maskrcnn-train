@@ -5,6 +5,7 @@
 # and the family's code and lock file (its framework versions).
 vars:
   - lib: packages/fashion-seg/src/fashion_seg
+  - torch: packages/fashion-seg-torch/src/fashion_seg_torch   # PyTorch families' shared loop
 
 stages:
   prepare:
@@ -61,6 +62,7 @@ stages:
       - families/torchvision/src/fashion_seg_torchvision/network.py
       - families/torchvision/src/fashion_seg_torchvision/training.py
       - families/torchvision/uv.lock
+      - ${torch}
       - ${lib}/service/training.py
       - ${lib}/data
     params:
@@ -71,6 +73,62 @@ stages:
       - ${train.torchvision.output_dir}/model
     metrics:
       - ${train.torchvision.output_dir}/metrics.json:
+          cache: false
+
+  # Python 3.12, PyTorch + Hugging Face transformers.
+  train_mask2former:
+    cmd: uv run --project families/mask2former --locked python -m fashion_seg_mask2former train
+    deps:
+      - ${data.prepared_dir}
+      - ${data.train_images}
+      - ${data.label_file}
+      - ${train.mask2former.init_weights}
+      # The family's training modules only: a serving change (predictor) keeps the training.
+      - families/mask2former/src/fashion_seg_mask2former/__init__.py
+      - families/mask2former/src/fashion_seg_mask2former/config.py
+      - families/mask2former/src/fashion_seg_mask2former/dataset.py
+      - families/mask2former/src/fashion_seg_mask2former/network.py
+      - families/mask2former/src/fashion_seg_mask2former/training.py
+      - families/mask2former/uv.lock
+      - ${torch}
+      - ${lib}/service/training.py
+      - ${lib}/data
+    params:
+      - data
+      - split
+      - train.mask2former
+    outs:
+      - ${train.mask2former.output_dir}/model
+    metrics:
+      - ${train.mask2former.output_dir}/metrics.json:
+          cache: false
+
+  # Python 3.12, PyTorch + Ultralytics.
+  train_yolo:
+    cmd: uv run --project families/yolo --locked python -m fashion_seg_yolo train
+    deps:
+      - ${data.prepared_dir}
+      - ${data.train_images}
+      - ${data.label_file}
+      - ${train.yolo.init_weights}
+      # The family's training modules only: a serving change (predictor) keeps the training.
+      - families/yolo/src/fashion_seg_yolo/__init__.py
+      - families/yolo/src/fashion_seg_yolo/config.py
+      - families/yolo/src/fashion_seg_yolo/dataset.py
+      - families/yolo/src/fashion_seg_yolo/isolation.py
+      - families/yolo/src/fashion_seg_yolo/training.py
+      - families/yolo/uv.lock
+      - ${torch}
+      - ${lib}/service/training.py
+      - ${lib}/data
+    params:
+      - data
+      - split
+      - train.yolo
+    outs:
+      - ${train.yolo.output_dir}/model
+    metrics:
+      - ${train.yolo.output_dir}/metrics.json:
           cache: false
 
   # A packaged model bundles the library and the family's code, and pins the serving
@@ -100,6 +158,7 @@ stages:
       - ${models.torchvision.source}
       - ${data.label_file}
       - ${lib}
+      - ${torch}
       - families/torchvision/src
       - families/torchvision/uv.lock
     params:
@@ -108,6 +167,42 @@ stages:
       - tracking.registered_name
     outs:
       - ${models.torchvision.output_dir}
+
+  package_mask2former:
+    cmd: >-
+      uv run --project families/mask2former --locked
+      python -m fashion_seg_mask2former package mask2former
+    deps:
+      - ${models.mask2former.source}
+      - ${data.label_file}
+      - ${lib}
+      - ${torch}
+      - families/mask2former/src
+      - families/mask2former/uv.lock
+    params:
+      - models.mask2former
+      - tracking.packaging_experiment
+      - tracking.registered_name
+    outs:
+      - ${models.mask2former.output_dir}
+
+  package_yolo:
+    cmd: >-
+      uv run --project families/yolo --locked
+      python -m fashion_seg_yolo package yolo
+    deps:
+      - ${models.yolo.source}
+      - ${data.label_file}
+      - ${lib}
+      - ${torch}
+      - families/yolo/src
+      - families/yolo/uv.lock
+    params:
+      - models.yolo
+      - tracking.packaging_experiment
+      - tracking.registered_name
+    outs:
+      - ${models.yolo.output_dir}
 
   # prepared/ follows the dataset version. The images are read from data/ but pulled separately
   # (make pull-val), so they are not a dependency: a partial pull would record the hash of
@@ -148,4 +243,42 @@ stages:
       - evaluate
     metrics:
       - ${evaluate.output_dir}/evaluate-torchvision.json:
+          cache: false
+
+  evaluate_mask2former:
+    cmd: >-
+      uv run --project families/mask2former --locked
+      python -m fashion_seg_mask2former evaluate mask2former
+    deps:
+      - ${models.mask2former.output_dir}
+      - ${data.prepared_dir}
+      - ${lib}/service/evaluation.py
+      - ${lib}/scoring.py
+    params:
+      - data.prepared_dir
+      - data.train_images
+      - data.label_file
+      - tracking.evaluation_experiment
+      - evaluate
+    metrics:
+      - ${evaluate.output_dir}/evaluate-mask2former.json:
+          cache: false
+
+  evaluate_yolo:
+    cmd: >-
+      uv run --project families/yolo --locked
+      python -m fashion_seg_yolo evaluate yolo
+    deps:
+      - ${models.yolo.output_dir}
+      - ${data.prepared_dir}
+      - ${lib}/service/evaluation.py
+      - ${lib}/scoring.py
+    params:
+      - data.prepared_dir
+      - data.train_images
+      - data.label_file
+      - tracking.evaluation_experiment
+      - evaluate
+    metrics:
+      - ${evaluate.output_dir}/evaluate-yolo.json:
           cache: false

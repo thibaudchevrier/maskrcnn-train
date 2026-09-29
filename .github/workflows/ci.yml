@@ -50,6 +50,8 @@ jobs:
         env:
           - { name: "library", project: ".", target: "test-architecture test-library" }
           - { name: "torchvision", project: families/torchvision, target: test-torchvision }
+          - { name: "mask2former", project: families/mask2former, target: test-mask2former }
+          - { name: "yolo", project: families/yolo, target: test-yolo }
           - { name: "matterport training", project: families/matterport, target: test-matterport-train }
           - { name: "matterport serving", project: families/matterport/serve, target: test-matterport-serve }
     steps:

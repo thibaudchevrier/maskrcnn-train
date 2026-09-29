@@ -65,6 +65,46 @@ train:
     device: auto              # CUDA, then Apple GPU (MPS), then CPU
     resume: true              # continue from checkpoints/last.pt if present
 
+  # Mask2Former (Swin-Tiny), fine-tuned from COCO instance segmentation.
+  mask2former:
+    output_dir: outputs/mask2former
+    init_weights: weights/mask2former-swin-tiny-coco-instance   # Hugging Face model directory
+    epochs: 1
+    max_train_images: null    # null = all
+    max_val_images: 500       # validation loss each epoch on a subset (mAP: evaluate stage)
+    max_size: 1024            # long side, as torchvision's
+    batch_size: 2
+    learning_rate: 0.0001     # AdamW, Mask2Former's recipe
+    backbone_lr_factor: 0.1   # the Swin backbone learns 10x slower
+    weight_decay: 0.05
+    warmup_steps: 500
+    num_workers: 4
+    log_every: 50
+    checkpoint_every: 500
+    seed: 0                   # shuffle order: reproducible, so a stopped run resumes mid-epoch
+    device: auto              # CUDA, then Apple GPU (MPS), then CPU
+    resume: true              # continue from checkpoints/last.pt if present
+
+  # YOLO11s segmentation (Ultralytics), fine-tuned from COCO. Ultralytics' recipe expects many
+  # short epochs (augmentation, EMA); a stop resumes at the start of the interrupted epoch.
+  yolo:
+    output_dir: outputs/yolo
+    init_weights: weights/yolo11s-seg.pt
+    model: yolo11s-seg        # architecture, when training from scratch (tests)
+    epochs: 10
+    max_train_images: null    # null = all
+    max_val_images: 500       # validation (losses, mask mAP) each epoch on a subset
+    imgsz: 640                # letterboxed square, Ultralytics' default
+    batch_size: 16
+    learning_rate: 0.01       # SGD, Ultralytics' default
+    optimizer: SGD            # "auto" would pick from the run length and ignore learning_rate
+    num_workers: 4            # dataset conversion (Ultralytics loads in-process on MPS and CPU)
+    log_every: 50
+    checkpoint_every: 500
+    seed: 0
+    device: auto              # CUDA, then Apple GPU (MPS), then CPU
+    resume: true              # continue from checkpoints/runs/train/weights/last.pt if present
+
 # Served models: package_<name> wraps an export as an MLflow pyfunc model (the contract),
 # evaluate_<name> scores it. Each is packaged and evaluated in its family's environment.
 models:
@@ -76,6 +116,14 @@ models:
     family: torchvision
     source: outputs/torchvision/model
     output_dir: models/fashion-maskrcnn-torchvision
+  mask2former:
+    family: mask2former
+    source: outputs/mask2former/model
+    output_dir: models/fashion-mask2former
+  yolo:
+    family: yolo
+    source: outputs/yolo/model
+    output_dir: models/fashion-yolo
 
 # Scores each packaged model on the frozen split, as it is served.
 evaluate:
