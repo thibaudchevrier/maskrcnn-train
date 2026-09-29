@@ -13,7 +13,11 @@ stages:
     deps:
       - ${data.train_csv}
       - ${lib}/service/preparation.py
-      - ${lib}/data
+      # The modules it uses (not data/images.py, the models' image handling).
+      - ${lib}/data/__init__.py
+      - ${lib}/data/annotations.py
+      - ${lib}/data/files.py
+      - ${lib}/data/split.py
     params:
       - data.train_csv
       - data.prepared_dir

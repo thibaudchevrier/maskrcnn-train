@@ -19,14 +19,14 @@ stages:
       size: 235627
     - path: families/matterport/src
       hash: md5
-      md5: 26b7707aa160fb7e738cf3a5df69f2d1.dir
-      size: 15534
+      md5: 760080461a3da16d05a83a14b7588080.dir
+      size: 21540
       nfiles: 6
     - path: packages/fashion-seg/src/fashion_seg
       hash: md5
-      md5: e4dbe9b73a61ba7297442a1fd22af149.dir
-      size: 78346
-      nfiles: 21
+      md5: baf3aaf709bc32b7b8b8f6e2c81bc7ac.dir
+      size: 91318
+      nfiles: 24
     params:
       params.yaml:
         models.legacy:
@@ -38,9 +38,9 @@ stages:
     outs:
     - path: models/fashion-maskrcnn
       hash: md5
-      md5: 76552d0617dcb91d353e8c858ccd17eb.dir
-      size: 266159841
-      nfiles: 43
+      md5: e387b670fb2979f563b76011c07f49c9.dir
+      size: 266178819
+      nfiles: 46
   prepare:
     cmd: python -m fashion_seg prepare
     deps:
@@ -48,11 +48,22 @@ stages:
       hash: md5
       md5: 7eaec314eed2d95c363ecb81f4475bb6
       size: 1437924420
-    - path: packages/fashion-seg/src/fashion_seg/data
+    - path: packages/fashion-seg/src/fashion_seg/data/__init__.py
       hash: md5
-      md5: df66db884d5a0491fb9134ada9acc248.dir
-      size: 8116
-      nfiles: 4
+      md5: 3ce09dc22d5a14fc7d361840d7b0be13
+      size: 91
+    - path: packages/fashion-seg/src/fashion_seg/data/annotations.py
+      hash: md5
+      md5: 2cca4abd4f9bd64feaa1f59b1d77d316
+      size: 2616
+    - path: packages/fashion-seg/src/fashion_seg/data/files.py
+      hash: md5
+      md5: 2e0bda3dc6bf3f297d5ad4485bb444a4
+      size: 3811
+    - path: packages/fashion-seg/src/fashion_seg/data/split.py
+      hash: md5
+      md5: ee44dc21de1ca5946c606a4e137a98a2
+      size: 1598
     - path: packages/fashion-seg/src/fashion_seg/service/preparation.py
       hash: md5
       md5: 99ee955285eb3123ed46d67e6736e0df
@@ -131,33 +142,38 @@ stages:
       nfiles: 45623
     - path: families/torchvision/src/fashion_seg_torchvision/__init__.py
       hash: md5
-      md5: 1e514fbead5f8fe458204cd48aff17d5
-      size: 2829
+      md5: 2aa98644dd182848f2825f0151382363
+      size: 2907
     - path: families/torchvision/src/fashion_seg_torchvision/config.py
       hash: md5
       md5: 89f2d71c7596fbcce01f3b883a63e361
       size: 1582
     - path: families/torchvision/src/fashion_seg_torchvision/dataset.py
       hash: md5
-      md5: 80c5051b81cc08d5133448108e06eba9
-      size: 4971
+      md5: 5dbf87b5d4208760363906d8282a35ef
+      size: 4222
     - path: families/torchvision/src/fashion_seg_torchvision/network.py
       hash: md5
-      md5: 25c6744425b2abb489455192eb214e2d
-      size: 3043
+      md5: fc4bdb9aa1266657f918f61de920d67b
+      size: 2491
     - path: families/torchvision/src/fashion_seg_torchvision/training.py
       hash: md5
-      md5: 5fac5f2e6765110ccf5d08edd309a0ac
-      size: 16739
+      md5: 2649f661c42917f82f1ad749d98a8334
+      size: 6379
     - path: families/torchvision/uv.lock
       hash: md5
-      md5: f63a6bcb4e86218fa78d8c98ee15632c
-      size: 206704
+      md5: db9b6c9a3aaf871721bd57cfe02a6e35
+      size: 207424
+    - path: packages/fashion-seg-torch/src/fashion_seg_torch
+      hash: md5
+      md5: f0a3ad3fe00603e380ec1b879c16a1c7.dir
+      size: 15703
+      nfiles: 4
     - path: packages/fashion-seg/src/fashion_seg/data
       hash: md5
-      md5: df66db884d5a0491fb9134ada9acc248.dir
-      size: 8116
-      nfiles: 4
+      md5: 78b10b361cde2b77d4183c92387fd739.dir
+      size: 14971
+      nfiles: 5
     - path: packages/fashion-seg/src/fashion_seg/service/training.py
       hash: md5
       md5: 3cfc7c8ea693640c92b85fd53b763432
@@ -221,23 +237,28 @@ stages:
       size: 39023
     - path: families/torchvision/src
       hash: md5
-      md5: 8615adaf53c32cc5294141e5ca51920c.dir
-      size: 35912
+      md5: cbce029d5d7afa15b252035cc7fa6e08.dir
+      size: 20861
       nfiles: 7
     - path: families/torchvision/uv.lock
       hash: md5
-      md5: f63a6bcb4e86218fa78d8c98ee15632c
-      size: 206704
+      md5: db9b6c9a3aaf871721bd57cfe02a6e35
+      size: 207424
     - path: outputs/torchvision/model
       hash: md5
       md5: 15956b00faa0d908aa7d01a10decf940.dir
       size: 184846595
       nfiles: 2
+    - path: packages/fashion-seg-torch/src/fashion_seg_torch
+      hash: md5
+      md5: f0a3ad3fe00603e380ec1b879c16a1c7.dir
+      size: 15703
+      nfiles: 4
     - path: packages/fashion-seg/src/fashion_seg
       hash: md5
-      md5: a0b3941f34a7a96f9ef6f85b91b0da1a.dir
-      size: 84135
-      nfiles: 23
+      md5: baf3aaf709bc32b7b8b8f6e2c81bc7ac.dir
+      size: 91318
+      nfiles: 24
     params:
       params.yaml:
         models.torchvision:
@@ -249,18 +270,18 @@ stages:
     outs:
     - path: models/fashion-maskrcnn-torchvision
       hash: md5
-      md5: 8855c8fe6e51b4cf36a0f19cbc3c3beb.dir
-      size: 185321966
-      nfiles: 44
+      md5: 297954fe86307e5334c7dc48d7be8881.dir
+      size: 185329801
+      nfiles: 49
   evaluate_legacy:
     cmd: uv run --project families/matterport/serve --locked python -m 
       fashion_seg_matterport evaluate legacy
     deps:
     - path: models/fashion-maskrcnn
       hash: md5
-      md5: 76552d0617dcb91d353e8c858ccd17eb.dir
-      size: 266159841
-      nfiles: 43
+      md5: e387b670fb2979f563b76011c07f49c9.dir
+      size: 266178819
+      nfiles: 46
     - path: packages/fashion-seg/src/fashion_seg/scoring.py
       hash: md5
       md5: c0d982f52cc34e7ec57e4dfc1f37a6ff
@@ -296,9 +317,9 @@ stages:
     deps:
     - path: models/fashion-maskrcnn-torchvision
       hash: md5
-      md5: 8855c8fe6e51b4cf36a0f19cbc3c3beb.dir
-      size: 185321966
-      nfiles: 44
+      md5: 297954fe86307e5334c7dc48d7be8881.dir
+      size: 185329801
+      nfiles: 49
     - path: packages/fashion-seg/src/fashion_seg/scoring.py
       hash: md5
       md5: c0d982f52cc34e7ec57e4dfc1f37a6ff

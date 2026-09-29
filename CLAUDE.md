@@ -147,6 +147,9 @@ weights reached.
   environment pins the same MLflow minor version (they share `mlflow.db`). The store is versioned by
   DVC: after a training, packaging or evaluation, `make mlflow-snapshot` (when nothing is writing to
   it) and commit `mlflow.db.dvc` / `mlartifacts.dvc` with the PR.
+  The experiments record an absolute artifact location (the main checkout's `mlartifacts/`):
+  a run from a git worktree writes its artifacts there, so move them into the worktree's
+  `mlartifacts/` before its snapshot.
 - **Environments**: the library's dependencies (`packages/fashion-seg/pyproject.toml`) stay
   framework-free and install on Python 3.11 and 3.12; frameworks go in the family's project. Its
   version is fixed (not the repository's): family lock files record it, so bump it only with its

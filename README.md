@@ -311,12 +311,14 @@ change.
 
 Scores of each packaged model on the whole validation split (5,703 images), COCO metrics
 computed by the `evaluate_<model>` stages (`uv run dvc metrics show`; per-class AP in MLflow,
-experiment `fashion-seg-evaluation`):
+experiment `fashion-seg-evaluation`). Versions 18 and 19 are re-packagings of 15 and 17 with the
+refactored code, checked to give byte-identical responses; they carry those scores
+(`val_scores_from_version` tag):
 
 | Model | Registry version | mask mAP | mask AP50 | box mAP | s / image |
 |-------|------------------|----------|-----------|---------|-----------|
-| 2021 Matterport Mask R-CNN (`legacy`) | 15 | 0.035 | 0.065 | 0.043 | 1.33 (CPU) |
-| torchvision Mask R-CNN v2, 1 epoch (`torchvision`) | 17 | **0.264** | **0.394** | **0.302** | 0.87 (Apple GPU) |
+| 2021 Matterport Mask R-CNN (`legacy`) | 18 | 0.035 | 0.065 | 0.043 | 1.33 (CPU) |
+| torchvision Mask R-CNN v2, 1 epoch (`torchvision`) | 19 | **0.264** | **0.394** | **0.302** | 0.87 (Apple GPU) |
 
 After one epoch (~5.3 h on an M4 Pro), torchvision is 7.6x better on masks. Large, frequent
 garments score well (dress 0.77, pants 0.76, sleeve 0.67); rare classes and small scattered
