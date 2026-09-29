@@ -4,7 +4,8 @@
   photos are large (often 3,000-5,000 px): decoding the JPEG at a reduced scale and resizing the
   masks before building targets keeps data loading fast.
 - Serving: ``full_size_masks`` brings masks predicted on a shrunk image back to its full size,
-  box by box, as booleans (a full-resolution float mask per instance would take gigabytes).
+  box by box, as booleans (a full-resolution float mask per instance would take gigabytes);
+  ``to_yxyx`` converts predicted ``(x1, y1, x2, y2)`` boxes to the contract's.
 
 Shared by every family's dataset and predictor.
 """
@@ -167,3 +168,38 @@ def shrunk_region(
     bottom = min(small_h, max(top + 1, math.ceil(y2 * small_h / height)))
     right = min(small_w, max(left + 1, math.ceil(x2 * small_w / width)))
     return slice(top, bottom), slice(left, right)
+
+
+def to_yxyx(boxes: np.ndarray, height: int, width: int) -> np.ndarray:
+    """Convert ``(x1, y1, x2, y2)`` float boxes to the contract's integer boxes, in the image.
+
+    Parameters
+    ----------
+    boxes : np.ndarray
+        ``[N, (x1, y1, x2, y2)]`` float, in image pixels.
+    height : int
+        Image height.
+    width : int
+        Image width.
+
+    Returns
+    -------
+    np.ndarray
+        ``[N, (y1, x1, y2, x2)]`` int32, ``(y2, x2)`` excluded.
+
+    Examples
+    --------
+    >>> to_yxyx(np.array([[1.5, 2.2, 9.9, 30.0]]), height=20, width=8).tolist()
+    [[2, 1, 20, 8]]
+    """
+    if boxes.shape[0] == 0:
+        return np.zeros((0, 4), np.int32)
+    return np.stack(
+        [
+            np.floor(boxes[:, 1]).clip(0, height),
+            np.floor(boxes[:, 0]).clip(0, width),
+            np.ceil(boxes[:, 3]).clip(0, height),
+            np.ceil(boxes[:, 2]).clip(0, width),
+        ],
+        axis=1,
+    ).astype(np.int32)

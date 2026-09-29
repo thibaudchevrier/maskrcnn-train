@@ -14,7 +14,7 @@ import torch
 from fashion_seg_torch.device import pick_device
 from PIL import Image
 
-from fashion_seg.data.images import full_size_masks
+from fashion_seg.data.images import full_size_masks, to_yxyx
 from fashion_seg.ports import Detections
 from fashion_seg_torchvision.network import build_model, to_tensor
 
@@ -79,38 +79,3 @@ class TorchvisionPredictor:
             scores=output["scores"].cpu().numpy().astype(np.float32),
             masks=full_size_masks(output["masks"][:, 0].cpu().numpy(), boxes, (height, width)),
         )
-
-
-def to_yxyx(boxes: np.ndarray, height: int, width: int) -> np.ndarray:
-    """Convert torchvision boxes to the contract's integer boxes, inside the image.
-
-    Parameters
-    ----------
-    boxes : np.ndarray
-        ``[N, (x1, y1, x2, y2)]`` float, in image pixels.
-    height : int
-        Image height.
-    width : int
-        Image width.
-
-    Returns
-    -------
-    np.ndarray
-        ``[N, (y1, x1, y2, x2)]`` int32, ``(y2, x2)`` excluded.
-
-    Examples
-    --------
-    >>> to_yxyx(np.array([[1.5, 2.2, 9.9, 30.0]]), height=20, width=8).tolist()
-    [[2, 1, 20, 8]]
-    """
-    if boxes.shape[0] == 0:
-        return np.zeros((0, 4), np.int32)
-    return np.stack(
-        [
-            np.floor(boxes[:, 1]).clip(0, height),
-            np.floor(boxes[:, 0]).clip(0, width),
-            np.ceil(boxes[:, 3]).clip(0, height),
-            np.ceil(boxes[:, 2]).clip(0, width),
-        ],
-        axis=1,
-    ).astype(np.int32)
