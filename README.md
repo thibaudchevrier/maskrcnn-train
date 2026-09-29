@@ -39,7 +39,10 @@ imports and serves.
 | Path | Content | Stored in |
 |------|---------|-----------|
 | `packages/fashion-seg/` | `fashion_seg`, the shared library: workflow, ports, data, scoring, serving wrapper, CLI (see [Code architecture](#code-architecture)) | git |
+| `packages/fashion-seg-torch/` | `fashion_seg_torch`: the PyTorch families' shared training loop (stop, exact resume) | git |
 | `families/torchvision/` | torchvision family: code + uv project (Python 3.12, PyTorch) | git |
+| `families/mask2former/` | Mask2Former family: code + uv project (Python 3.12, PyTorch, Hugging Face `transformers`) | git |
+| `families/yolo/` | YOLO family: code + uv project (Python 3.12, PyTorch, Ultralytics) | git |
 | `families/matterport/` | Matterport family: code + training uv project (Python 3.11, TensorFlow 2.15); `serve/`: its serving uv project (Python 3.12, TensorFlow 2.21) | git |
 | `data/` | iMaterialist images + `train.csv` + `label_descriptions.json` (~23.7 GB, 48k files) | DVC (`data.dvc`) |
 | `prepared/` | `annotations.parquet` (one row per image) + `split.json` (frozen train/val ids) | DVC (`prepare` stage) |
@@ -48,6 +51,7 @@ imports and serves.
 | `deployement/` | 2021 Matterport model (TF SavedModel + `config.json`) | DVC (`deployement.dvc`) |
 | `models/fashion-maskrcnn/` | **Build output**: the packaged 2021 model, the one fashion-serving imports today | DVC (`package_legacy` stage) |
 | `models/fashion-maskrcnn-torchvision/` | **Build output**: the packaged torchvision model | DVC (`package_torchvision` stage) |
+| `models/fashion-mask2former/`, `models/fashion-yolo/` | **Build outputs**, once those families are trained | DVC (`package_<model>` stages) |
 | `metrics/` | Evaluation scores of each packaged model | git (`evaluate_<model>` stage) |
 | `mlflow.db`, `mlartifacts/` | Local MLflow tracking store (runs, curves, registry) | DVC (`mlflow.db.dvc`, `mlartifacts.dvc`), snapshot with `make mlflow-snapshot` |
 
@@ -111,9 +115,11 @@ through Protocols, injection in the entrypoint) are in [`CLAUDE.md`](CLAUDE.md) 
 data/imaterialist/train.csv ─► prepare ─► prepared/ ─┐
 data/imaterialist/train/ ────────────────────────────┼─► train_matterport  ─► outputs/matterport/
 weights/mask_rcnn_coco.h5 ───────────────────────────┤
-weights/maskrcnn_resnet50_fpn_v2_coco.pth ───────────┴─► train_torchvision ─► outputs/torchvision/
+weights/maskrcnn_resnet50_fpn_v2_coco.pth ───────────┼─► train_torchvision ─► outputs/torchvision/
+weights/mask2former-swin-tiny-coco-instance/ ────────┼─► train_mask2former ─► outputs/mask2former/
+weights/yolo11s-seg.pt ──────────────────────────────┴─► train_yolo        ─► outputs/yolo/
 deployement/ (2021 model) ────────────────────────────► package_legacy      ─► models/fashion-maskrcnn/
-outputs/torchvision/model ────────────────────────────► package_torchvision ─► models/fashion-maskrcnn-torchvision/
+outputs/<family>/model ───────────────────────────────► package_<model>     ─► models/fashion-<...>/
 models/<packaged> + prepared/ + val images ───────────► evaluate_<model>    ─► metrics/evaluate-<model>.json
 ```
 
@@ -124,8 +130,10 @@ Each stage runs in the environment it names: `python -m fashion_seg prepare` (ro
 | `prepare` | root | Groups `train.csv` (333k masks) into one row per image, and writes the frozen split: images sorted by id, `KFold(8, shuffle, seed 42)`, fold 0 = validation (39,920 train / 5,703 val), the procedure of the 2021 notebook |
 | `train_matterport` | `families/matterport` | Starts from COCO weights, trains with the 2021 notebook's settings (`params.yaml:train.matterport`), logs every epoch's losses to the MLflow experiment `fashion-seg-training`, exports the inference model and `metrics.json` |
 | `train_torchvision` | `families/torchvision` | Fine-tunes torchvision Mask R-CNN v2 from COCO (`params.yaml:train.torchvision`) on CUDA, the Apple GPU or CPU; logs losses, learning rate and per-epoch validation losses to `fashion-seg-training`; checkpoints every epoch (`resume: true` continues an interrupted run); exports `config.json` + `model.pt` |
-| `package_legacy`, `package_torchvision` | `families/matterport/serve`, `families/torchvision` | One per entry of `params.yaml:models`: wraps a model export as an MLflow pyfunc model that serves the contract, with its own requirements (TensorFlow or PyTorch, never both); registers a new `fashion-maskrcnn` version tagged with its `model_family`; writes `models/<name>/` |
-| `evaluate_legacy`, `evaluate_torchvision` | `families/matterport/serve`, `families/torchvision` | Loads a packaged model as it is served, predicts the validation split, computes COCO mask and box mAP (plus AP50, AP75, recall, per-class AP) with pycocotools; logs to the MLflow experiment `fashion-seg-evaluation`, tags the registered model version (`val_mask_map`...), writes `metrics/evaluate-<model>.json` |
+| `train_mask2former` | `families/mask2former` | Fine-tunes Mask2Former (Swin-Tiny) from COCO instance segmentation with AdamW (backbone at 0.1x), same loop as torchvision; exports the Hugging Face model + `fashion_seg.json` |
+| `train_yolo` | `families/yolo` | Converts the prepared annotations to Ultralytics' format (images at `imgsz` + polygons) and fine-tunes YOLO11s-seg from COCO with Ultralytics' trainer; logs its losses and per-epoch mask/box mAP to `fashion-seg-training`; exports `model.pt` + `fashion_seg.json` |
+| `package_<model>` (`legacy`, `torchvision`, `mask2former`, `yolo`) | `families/matterport/serve`, else the family's | One per entry of `params.yaml:models`: wraps a model export as an MLflow pyfunc model that serves the contract, with its own requirements (TensorFlow or PyTorch, never both); registers a new `fashion-maskrcnn` version tagged with its `model_family`; writes `models/<name>/` |
+| `evaluate_<model>` | same as `package_<model>` | Loads a packaged model as it is served, predicts the validation split, computes COCO mask and box mAP (plus AP50, AP75, recall, per-class AP) with pycocotools; logs to the MLflow experiment `fashion-seg-evaluation`, tags the registered model version (`val_mask_map`...), writes `metrics/evaluate-<model>.json` |
 
 Each stage re-runs only when its inputs (files, code, `params.yaml` section) changed since `dvc.lock`.
 
@@ -204,6 +212,21 @@ or find a stopped one by its `stopped_at_step` tag. To start over instead, delet
 - **Matterport** finishes the interrupted epoch with its remaining steps, then continues; that
   remainder draws a new shuffle and the SGD momentum restarts, because the fork shuffles with
   numpy's global generator and saves weights only.
+- **Mask2Former** resumes exactly, like torchvision (same loop, `fashion_seg_torch`).
+- **YOLO** runs Ultralytics' own loop, whose data order cannot be replayed mid-epoch: a stop
+  resumes at the start of the interrupted epoch, with the weights and optimizer state reached.
+  Its steps are batches (16 images).
+
+**Mask2Former** and **YOLO** (PyTorch, Apple GPU or CUDA):
+
+```bash
+make train-mask2former-smoke && uv run dvc repro --single-item train_mask2former
+make train-yolo-smoke && uv run dvc repro --single-item train_yolo
+```
+
+YOLO comes from Ultralytics, under AGPL-3.0: serving it over a network obliges to publish the
+service's source (both repositories are public). Its family keeps Ultralytics' settings in a
+private temporary folder, offline (no analytics), without its own tracker integrations.
 
 **Matterport** (the 2021 model's architecture; TensorFlow 2.15, CPU-only on a Mac):
 
@@ -288,12 +311,14 @@ change.
 
 Scores of each packaged model on the whole validation split (5,703 images), COCO metrics
 computed by the `evaluate_<model>` stages (`uv run dvc metrics show`; per-class AP in MLflow,
-experiment `fashion-seg-evaluation`):
+experiment `fashion-seg-evaluation`). Versions 18 and 19 are re-packagings of 15 and 17 with the
+refactored code, checked to give byte-identical responses; they carry those scores
+(`val_scores_from_version` tag):
 
 | Model | Registry version | mask mAP | mask AP50 | box mAP | s / image |
 |-------|------------------|----------|-----------|---------|-----------|
-| 2021 Matterport Mask R-CNN (`legacy`) | 15 | 0.035 | 0.065 | 0.043 | 1.33 (CPU) |
-| torchvision Mask R-CNN v2, 1 epoch (`torchvision`) | 17 | **0.264** | **0.394** | **0.302** | 0.87 (Apple GPU) |
+| 2021 Matterport Mask R-CNN (`legacy`) | 18 | 0.035 | 0.065 | 0.043 | 1.33 (CPU) |
+| torchvision Mask R-CNN v2, 1 epoch (`torchvision`) | 19 | **0.264** | **0.394** | **0.302** | 0.87 (Apple GPU) |
 
 After one epoch (~5.3 h on an M4 Pro), torchvision is 7.6x better on masks. Large, frequent
 garments score well (dress 0.77, pants 0.76, sleeve 0.67); rare classes and small scattered
@@ -371,7 +396,7 @@ The version tracks the code; model versions are tracked separately by the MLflow
 | Job | What it checks |
 |-----|----------------|
 | **Lint** | All pre-commit hooks (`make lint`): ruff, pydoclint, pylint per environment, hygiene |
-| **Tests** (one job per environment) | Library (data, scoring, serving wrapper, CLI, architecture rules), torchvision (training smoke run, predictor, packaging), Matterport training (smoke run, TF 2.15, Python 3.11) and serving; responses validated with `fashion_seg_contract.schema` |
+| **Tests** (one job per environment) | Library (data, scoring, serving wrapper, CLI, architecture rules), torchvision (with the shared loop), Mask2Former and YOLO (training smoke run, stop and resume, predictor, packaging), Matterport training (smoke run, TF 2.15, Python 3.11) and serving; responses validated with `fashion_seg_contract.schema` |
 | **ML checks** | Pulls the 2021 model and the published package from Drive, fails if `dvc.lock` is stale for `package_legacy`, runs the tests against the real model |
 
 The **ML checks** need Drive access and are skipped until the `GDRIVE_CREDENTIALS_DATA` secret
@@ -387,8 +412,9 @@ Testing):
 
 ## Roadmap
 
-1. **More torchvision epochs**, and the rare classes (more data or re-weighting).
-2. **Promotion**: mark the best evaluated model `@champion` in the MLflow registry and serve it;
+1. **Train Mask2Former and YOLO** on the full split and compare them with torchvision.
+2. **More torchvision epochs**, and the rare classes (more data or re-weighting).
+3. **Promotion**: mark the best evaluated model `@champion` in the MLflow registry and serve it;
    CI comments `dvc metrics diff` on the PR.
-3. **Pre-resized images** (a `prepare` output at 1024 px) to speed up data loading.
-4. **Augmentation** for the Matterport trainer (imgaug is unmaintained; needs a compatible substitute).
+4. **Pre-resized images** (a `prepare` output at 1024 px) to speed up data loading.
+5. **Augmentation** for the Matterport trainer (imgaug is unmaintained; needs a compatible substitute).

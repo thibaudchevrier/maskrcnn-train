@@ -21,8 +21,8 @@ def setup_experiment(name: str) -> str:
     """Point MLflow at the tracking store and select an experiment, creating it if needed.
 
     The store is ``$MLFLOW_TRACKING_URI``, local SQLite (``mlflow.db``) by default. With the local
-    default, run artifacts go to ``./mlartifacts/<name>`` so they don't mix with the archived,
-    DVC-tracked ``./mlruns`` folder.
+    default, run artifacts go to ``./mlartifacts/<name>``, next to the database (both versioned
+    with DVC by ``make mlflow-snapshot``).
 
     Parameters
     ----------

@@ -5,18 +5,17 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import torch
-from fashion_seg_contract import rle
-from PIL import Image
 from torch.utils.data import Dataset
 
+from fashion_seg.data.images import load_example
 from fashion_seg_torchvision.network import to_tensor
 
 
 class FashionDataset(Dataset):
     """Images and instance targets, downscaled so the long side is at most ``max_side``.
 
-    iMaterialist photos are large (often 3000-5000 px): downscaling while decoding the JPEG and
-    before building the targets keeps data loading fast; the model resizes further as configured.
+    Images and masks come from ``fashion_seg.data.images.load_example`` (fast JPEG downscaling);
+    the model resizes further as configured.
 
     Parameters
     ----------
@@ -71,23 +70,8 @@ class FashionDataset(Dataset):
             ``[N, (x1, y1, x2, y2)]``, ``labels`` ``[N]`` (category + 1) and ``masks``
             ``[N, H, W]`` uint8. Instances that vanish when downscaled are dropped.
         """
-        row = self.records.row(index, named=True)
-        height, width = int(row["height"]), int(row["width"])
-        scale = min(1.0, self.max_side / max(height, width))
-        size = (max(1, round(width * scale)), max(1, round(height * scale)))
-        with Image.open(self.image_dir / f"{row['image_id']}.jpg") as img:
-            img.draft("RGB", size)  # JPEG decoded at a reduced scale: much faster
-            image = np.asarray(img.convert("RGB").resize(size, Image.Resampling.BILINEAR))
-        masks = [
-            np.asarray(
-                Image.fromarray(rle.decode(r, height, width).astype(np.uint8)).resize(
-                    size, Image.Resampling.NEAREST
-                )
-            )
-            for r in row["rles"]
-        ]
-        labels = [int(c) + 1 for c in row["class_ids"]]
-        return to_tensor(image), build_targets(masks, labels)
+        example = load_example(self.records.row(index, named=True), self.image_dir, self.max_side)
+        return to_tensor(example.image), build_targets(example.masks, example.labels)
 
 
 def build_targets(masks: list[np.ndarray], labels: list[int]) -> dict[str, torch.Tensor]:

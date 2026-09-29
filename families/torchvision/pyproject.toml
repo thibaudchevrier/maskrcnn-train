@@ -7,6 +7,7 @@ description = "torchvision Mask R-CNN v2 family of fashion-seg-train"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fashion-seg",
+    "fashion-seg-torch",
     "torch>=2.8",
     "torchvision>=0.23",
 ]
@@ -21,6 +22,7 @@ explicit = true
 
 [tool.uv.sources]
 fashion-seg = { path = "../../packages/fashion-seg", editable = true }
+fashion-seg-torch = { path = "../../packages/fashion-seg-torch", editable = true }
 fashion-seg-testing = { path = "../../packages/fashion-seg-testing", editable = true }
 # Linux (CI, Docker, cloud CPU): CPU-only PyTorch wheels, without ~2 GB of CUDA libraries.
 # macOS wheels include the Apple GPU (MPS) backend.
@@ -37,7 +39,7 @@ packages = ["src/fashion_seg_torchvision"]
 [tool.pytest.ini_options]
 # Docstring examples are tests too.
 addopts = "--doctest-modules"
-testpaths = ["src", "tests"]
+testpaths = ["src", "tests", "../../packages/fashion-seg-torch/src", "../../packages/fashion-seg-torch/tests"]
 
 [tool.pylint.main]
 py-version = "3.12"

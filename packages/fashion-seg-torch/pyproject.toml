@@ -1,0 +1,20 @@
+# The PyTorch toolkit shared by the families that train with our own loop (torchvision,
+# Mask2Former): device choice, reproducible and resumable data order, and a training loop that
+# checkpoints, logs, stops and resumes. A family brings its model and a Task (how to compute its
+# losses). Its tests run in the torchvision environment (make test-torchvision).
+[project]
+name = "fashion-seg-torch"
+version = "0.1.0"
+description = "Shared PyTorch training loop of fashion-seg-train's families"
+requires-python = ">=3.12,<3.13"
+dependencies = ["fashion-seg", "torch>=2.8"]
+
+[tool.uv.sources]
+fashion-seg = { path = "../fashion-seg", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fashion_seg_torch"]

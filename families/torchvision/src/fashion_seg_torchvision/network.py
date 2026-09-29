@@ -1,4 +1,4 @@
-"""Build Mask R-CNN v2 for the fashion classes; device and image helpers.
+"""Build Mask R-CNN v2 for the fashion classes; image helper.
 
 Shared by training and serving: only torch, torchvision and numpy.
 """
@@ -52,28 +52,6 @@ def build_model(
         mask_features = model.roi_heads.mask_predictor.conv5_mask.in_channels
         model.roi_heads.mask_predictor = MaskRCNNPredictor(mask_features, 256, num_classes)
     return model
-
-
-def pick_device(name: str) -> torch.device:
-    """Resolve a device name, ``"auto"`` meaning CUDA, then Apple GPU (MPS), then CPU.
-
-    Parameters
-    ----------
-    name : str
-        ``"auto"``, ``"cuda"``, ``"mps"`` or ``"cpu"``.
-
-    Returns
-    -------
-    torch.device
-        The device.
-    """
-    if name != "auto":
-        return torch.device(name)
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
 
 
 def to_tensor(image: np.ndarray) -> torch.Tensor:

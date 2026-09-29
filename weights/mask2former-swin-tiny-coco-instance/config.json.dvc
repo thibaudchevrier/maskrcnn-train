@@ -1,0 +1,13 @@
+md5: 251bd1f6f5adcce7eb6c7cf91515b7d7
+frozen: true
+deps:
+- checksum: '"3ba17e5cefd8b9be3bc774edf7bda7663b30bd22"'
+  size: 79763
+  hash: md5
+  path: 
+    https://huggingface.co/facebook/mask2former-swin-tiny-coco-instance/resolve/main/config.json
+outs:
+- md5: 8bbed34fbff4d75dbdfb43335bb755a5
+  size: 79763
+  hash: md5
+  path: config.json

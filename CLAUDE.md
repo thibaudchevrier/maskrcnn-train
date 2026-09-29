@@ -12,7 +12,10 @@ which [fashion-serving](https://github.com/thibaudchevrier/fashion-serving) impo
 | Path | Content | Environment (uv project) |
 |------|---------|------|
 | `packages/fashion-seg/` | `fashion_seg`: the shared library, framework-free (ports, config, data, workflow, scoring, serving wrapper, generic CLI), and its tests | installed in every environment |
+| `packages/fashion-seg-torch/` | `fashion_seg_torch`: the PyTorch families' shared training loop (stop, exact resume, checkpoints), loaders and device choice; tested in the torchvision environment | installed in the PyTorch families' environments |
 | `families/torchvision/` | `fashion_seg_torchvision`: all the torchvision logic + its entrypoint | Python 3.12, PyTorch: trains, packages, evaluates |
+| `families/mask2former/` | `fashion_seg_mask2former`: Mask2Former (Swin-Tiny, Hugging Face `transformers`) + its entrypoint | Python 3.12, PyTorch, transformers: trains, packages, evaluates |
+| `families/yolo/` | `fashion_seg_yolo`: YOLO11 segmentation (Ultralytics, AGPL-3.0) + its entrypoint | Python 3.12, PyTorch, Ultralytics: trains, packages, evaluates |
 | `families/matterport/` | `fashion_seg_matterport`: all the Matterport logic + its entrypoint | Python 3.11, TensorFlow 2.15: trains |
 | `families/matterport/serve/` | Serving environment of the same package | Python 3.12, TensorFlow 2.18+: packages, evaluates |
 | `pyproject.toml` (root) | The repository: version (commitizen), DVC, lint, architecture tests (`tests/`), `prepare` | Python 3.12, no framework |
@@ -46,7 +49,7 @@ uv run --project families/torchvision python -m fashion_seg_torchvision train
 | Module (`packages/fashion-seg/src/fashion_seg/`) | Role | May import (from `fashion_seg`) |
 |--------|------|------|
 | `config.py` | pydantic models of `params.yaml`; `TrainConfig`, the base of every family's config | nothing |
-| `data/` | Pure dataset logic (`annotations.py`: per-image grouping and selection; `split.py`: the frozen split) and its files (`files.py`: `train.csv`, prepared annotations and split, images on disk) | itself |
+| `data/` | Pure dataset logic (`annotations.py`: per-image grouping and selection; `split.py`: the frozen split), its files (`files.py`: `train.csv`, prepared annotations and split, images on disk) and images (`images.py`: an example downscaled for a model; masks and boxes back to full size, shared by every family's dataset and predictor) | itself |
 | `scoring.py` | COCO mask and box mAP of contract predictions (pycocotools) | nothing |
 | `ports.py` | The interfaces: `ModelFamily`, `Predictor`, `MetricLogger`, `StopSignal`, `Tracker`, `ModelRepository` (Protocols), `Detections`, `TrainInputs`, `TrainingSession`, `TrainResult`, `ModelPackage`, `Infrastructure`, `FamilySpec` | `config` |
 | `progress.py` | Where a training is in its data: each epoch's reproducible shuffle order (pure) | nothing |
@@ -59,8 +62,13 @@ uv run --project families/torchvision python -m fashion_seg_torchvision train
 A family package (`families/<name>/src/fashion_seg_<name>/`) holds **all of its model logic**:
 `__init__.py` implements `ModelFamily` (`SPEC`, `Config`, `train`, `load_predictor`, `describe`),
 submodules hold the network, dataset, training loop and predictor, and `__main__.py` is its
-entrypoint. It may import `fashion_seg.config` and `fashion_seg.ports` only (its entrypoint,
-`fashion_seg.cli`), never MLflow nor another family.
+entrypoint. It may import `fashion_seg.config`, `data`, `ports` and `progress` only (its
+entrypoint, `fashion_seg.cli`), never MLflow nor another family.
+
+Code several families share without it belonging in the framework-free library goes in a
+shared package (`packages/fashion-seg-torch`: the PyTorch training loop), under the same rules
+as a family. A family names the shared packages its predictor imports in `SPEC.bundles`, so
+that packaging bundles them with the model.
 
 Test helpers (a synthetic dataset and its `params.yaml`) are in `packages/fashion-seg-testing`,
 a dev-only dependency, so they never ship with a packaged model. The workflow steps are tested
@@ -76,7 +84,10 @@ fails the tests.
 signal). A family checkpoints every `checkpoint_every` steps, and when `session.stop` is set it
 saves and returns `TrainResult(stopped_at=step)`; the service tags the run and the CLI exits
 asking to resume. Resuming restores the checkpoint in `inputs.checkpoint_dir`, as exactly as the
-framework allows (use `fashion_seg.progress.epoch_order` for a reproducible order).
+framework allows (use `fashion_seg.progress.epoch_order` for a reproducible order). The PyTorch
+families get this from `fashion_seg_torch.loop.fit` (exact, mid-epoch). YOLO runs Ultralytics'
+own loop through callbacks: a stop mid-epoch resumes at the start of that epoch, with the
+weights reached.
 
 ### Design rules
 
@@ -136,6 +147,9 @@ framework allows (use `fashion_seg.progress.epoch_order` for a reproducible orde
   environment pins the same MLflow minor version (they share `mlflow.db`). The store is versioned by
   DVC: after a training, packaging or evaluation, `make mlflow-snapshot` (when nothing is writing to
   it) and commit `mlflow.db.dvc` / `mlartifacts.dvc` with the PR.
+  The experiments record an absolute artifact location (the main checkout's `mlartifacts/`):
+  a run from a git worktree writes its artifacts there, so move them into the worktree's
+  `mlartifacts/` before its snapshot.
 - **Environments**: the library's dependencies (`packages/fashion-seg/pyproject.toml`) stay
   framework-free and install on Python 3.11 and 3.12; frameworks go in the family's project. Its
   version is fixed (not the repository's): family lock files record it, so bump it only with its
@@ -176,20 +190,24 @@ make lint                     # all pre-commit hooks on all files (exactly what 
 make test                     # every environment's tests, including docstring examples
 make test-library             # the library (packages/fashion-seg/tests, doctests)
 make test-architecture        # dependency rules across the library and the families (tests/)
-                              # test-torchvision, test-matterport-train, test-matterport-serve
+                              # test-torchvision, test-mask2former, test-yolo,
+                              # test-matterport-train, test-matterport-serve
 make check                    # lint + test: run before every commit
 make prepare                  # dvc repro --single-item prepare
 make pull-sample              # a few images for smoke runs
 make train-matterport-smoke   # tiny training run on the pulled images
 make train-torchvision-smoke  # same for torchvision (Apple GPU if available)
-make train FAMILY=torchvision # full training of a family in the background (resumable)
+                              # (train-mask2former-smoke, train-yolo-smoke)
+make train FAMILY=torchvision # full training of a family in the background (resumable;
+                              # FAMILY=mask2former|yolo|matterport)
 make train-log / train-stop   # follow it / save and stop it (resume: make train again)
 make mlflow-ui                # http://localhost:5002
 make pull-val                 # validation images (VAL_IMAGES=200 for a subset)
-make evaluate-quick MODEL=legacy   # score a packaged model on 200 val images (not DVC-tracked)
+make evaluate-quick MODEL=legacy   # score a packaged model on 200 val images (not DVC-tracked;
+                                   # MODEL=torchvision|mask2former|yolo)
 uv run --project families/torchvision python -m fashion_seg_torchvision --help
 uv run dvc repro --single-item evaluate_legacy   # score it on the whole split
-uv run dvc repro --single-item package_legacy    # re-package a model (or package_torchvision)
+uv run dvc repro --single-item package_legacy    # re-package a model (or package_<model>)
 ```
 
 ## Standards

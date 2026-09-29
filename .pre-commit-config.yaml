@@ -59,7 +59,25 @@ repos:
           --disable=redefined-outer-name,unbalanced-tuple-unpacking
         language: system
         types: [python]
-        files: ^families/torchvision/
+        files: ^(families/torchvision|packages/fashion-seg-torch)/  # the shared loop runs here
+      - id: pylint-mask2former
+        name: pylint (families/mask2former)
+        entry: >-
+          uv run --no-sync --project families/mask2former pylint
+          --rcfile families/mask2former/pyproject.toml
+          --disable=redefined-outer-name,unbalanced-tuple-unpacking
+        language: system
+        types: [python]
+        files: ^families/mask2former/
+      - id: pylint-yolo
+        name: pylint (families/yolo)
+        entry: >-
+          uv run --no-sync --project families/yolo pylint
+          --rcfile families/yolo/pyproject.toml
+          --disable=redefined-outer-name,unbalanced-tuple-unpacking
+        language: system
+        types: [python]
+        files: ^families/yolo/
       - id: pylint-matterport
         name: pylint (families/matterport)
         entry: >-

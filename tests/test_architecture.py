@@ -13,6 +13,8 @@ ROOT = Path(__file__).parents[1]
 LIBRARY = ROOT / "packages" / "fashion-seg" / "src" / "fashion_seg"
 FAMILIES = sorted((ROOT / "families").glob("*/src/fashion_seg_*"))
 FAMILY_PACKAGES = {family.name for family in FAMILIES}
+# Code shared by several families (e.g. the PyTorch training loop): a family's helper.
+SHARED = sorted((ROOT / "packages").glob("*/src/fashion_seg_*"))
 
 # Which fashion_seg modules each module of the library may import: inner layers know nothing of
 # outer ones, and nothing but the command line knows the workflow.
@@ -32,7 +34,7 @@ ALLOWED = {
 # model): the workflow reaches them through the ports, families through a MetricLogger.
 INFRASTRUCTURE = {"mlflow"}
 INFRASTRUCTURE_LAYERS = {"adapters", "serving"}
-FRAMEWORKS = {"torch", "torchvision", "tensorflow", "keras", "mrcnn"}
+FRAMEWORKS = {"torch", "torchvision", "transformers", "ultralytics", "tensorflow", "keras", "mrcnn"}
 
 
 def _imports(path: Path) -> set[str]:
@@ -74,10 +76,12 @@ def test_library_modules_respect_the_dependency_rules(path):
     ids=lambda p: str(p.relative_to(ROOT / "families")),
 )
 def test_families_only_use_the_ports(path):
-    """A family uses the library's config, ports, progress (entrypoint: CLI); never MLflow."""
+    """A family uses the library's config, data, ports, progress (entrypoint: CLI); no MLflow."""
     imports = _imports(path)
     library = {name.split(".")[1] for name in imports if name.startswith("fashion_seg.")}
-    allowed = {"config", "ports", "progress"} | ({"cli"} if path.name == "__main__.py" else set())
+    allowed = {"config", "data", "ports", "progress"} | (
+        {"cli"} if path.name == "__main__.py" else set()
+    )
     assert library <= allowed, f"imports fashion_seg.{library - allowed}"
     own = path.parts[path.parts.index("src") + 1]
     assert not _roots(imports) & (FAMILY_PACKAGES - {own})
@@ -88,3 +92,17 @@ def test_families_only_use_the_ports(path):
 def test_family_package_imports_its_framework_lazily(family):
     """A family's package module imports no framework: each environment may lack one of them."""
     assert not _roots(_imports(family / "__init__.py")) & FRAMEWORKS
+
+
+@pytest.mark.parametrize(
+    "path",
+    sorted(p for package in SHARED for p in package.rglob("*.py")),
+    ids=lambda p: str(p.relative_to(ROOT / "packages")),
+)
+def test_shared_packages_are_family_helpers(path):
+    """Shared code uses what a family may use (config, data, ports, progress), and no family."""
+    imports = _imports(path)
+    library = {name.split(".")[1] for name in imports if name.startswith("fashion_seg.")}
+    assert library <= {"config", "data", "ports", "progress"}
+    assert not _roots(imports) & FAMILY_PACKAGES
+    assert "mlflow" not in _roots(imports)
