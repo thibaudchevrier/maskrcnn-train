@@ -1,3 +1,13 @@
+## v0.6.0 (2026-09-29)
+
+### Feat
+
+- **model**: torchvision Mask R-CNN v2 trained one epoch, mask mAP 0.264
+
+### Fix
+
+- **torchvision**: predict large photos without running out of memory
+
 ## v0.5.0 (2026-09-28)
 
 ### Feat
