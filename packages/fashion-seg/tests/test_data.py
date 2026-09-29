@@ -88,3 +88,15 @@ def test_load_example_downscales_image_and_masks_together(tmp_path):
     assert example.labels == [5]
     [small] = example.masks
     assert small.shape == (25, 50) and small.sum() == 10 * 20
+
+
+def test_masks_are_pasted_inside_their_box():
+    """Upscaled masks stay inside their box, at the image's exact size."""
+    probs = np.zeros((2, 10, 7), np.float32)
+    probs[0, 2:6, 1:5] = 1.0
+    probs[1] = 1.0  # a mask covering the whole shrunk image...
+    boxes = np.array([[6, 3, 18, 15], [0, 0, 4, 4]], np.int32)  # ...but a small box
+    masks = images.full_size_masks(probs, boxes, (31, 22))
+    assert masks.shape == (31, 22, 2)
+    assert masks[:, :, 1].sum() == 16 and masks[:4, :4, 1].all()
+    assert not masks[:6, :, 0].any() and masks[6:18, 3:15, 0].any()

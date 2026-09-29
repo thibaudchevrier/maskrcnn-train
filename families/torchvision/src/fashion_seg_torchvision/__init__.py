@@ -34,6 +34,7 @@ SPEC = FamilySpec(
         # default ones bundle CUDA).
         pip_options=("--extra-index-url https://download.pytorch.org/whl/cpu",),
     ),
+    bundles=("fashion_seg_torch",),  # the predictor picks its device with it
 )
 
 

@@ -192,10 +192,15 @@ class FamilySpec(Frozen):
         Family name, the key of its ``params.yaml:train`` section.
     serving : ServingRequirements
         Requirements of its packaged models.
+    bundles : tuple[str, ...]
+        Other first-party packages its serving code imports (e.g. ``fashion_seg_torch``):
+        bundled with its packaged models, with ``fashion_seg`` and its own package.
+        By default ``()``.
     """
 
     name: str
     serving: ServingRequirements
+    bundles: tuple[str, ...] = ()
 
 
 @runtime_checkable

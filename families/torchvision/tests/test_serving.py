@@ -17,7 +17,7 @@ from fashion_seg.service.packaging import package
 from fashion_seg.serving.response import encode_image
 from fashion_seg_testing import write_params
 from fashion_seg_torchvision.network import build_model
-from fashion_seg_torchvision.predictor import TorchvisionPredictor, full_size_masks
+from fashion_seg_torchvision.predictor import TorchvisionPredictor
 
 
 @pytest.fixture
@@ -59,18 +59,6 @@ def test_large_images_are_shrunk_and_masks_come_back_at_full_size(export_dir):
     ).all()
 
 
-def test_masks_are_pasted_inside_their_box():
-    """Upscaled masks stay inside their box, at the image's exact size."""
-    probs = np.zeros((2, 10, 7), np.float32)
-    probs[0, 2:6, 1:5] = 1.0
-    probs[1] = 1.0  # a mask covering the whole shrunk image...
-    boxes = np.array([[6, 3, 18, 15], [0, 0, 4, 4]], np.int32)  # ...but a small box
-    masks = full_size_masks(probs, boxes, (31, 22))
-    assert masks.shape == (31, 22, 2)
-    assert masks[:, :, 1].sum() == 16 and masks[:4, :4, 1].all()
-    assert not masks[:6, :, 0].any() and masks[6:18, 3:15, 0].any()
-
-
 def test_packaged_torchvision_model_follows_the_contract(export_dir, tmp_path, monkeypatch):
     """A packaged torchvision model loads its own predictor and answers contract predictions."""
     monkeypatch.setenv("MLFLOW_TRACKING_URI", f"sqlite:///{tmp_path / 'mlflow.db'}")
@@ -89,7 +77,7 @@ def test_packaged_torchvision_model_follows_the_contract(export_dir, tmp_path, m
     assert "torchvision==" in requirements and "tensorflow" not in requirements
     assert "mlflow==" in requirements and "fashion-seg-contract @ https:" in requirements
     bundled = {p.name for p in (tmp_path / "packaged" / "code").iterdir()}
-    assert bundled == {"fashion_seg", "fashion_seg_torchvision"}
+    assert bundled == {"fashion_seg", "fashion_seg_torch", "fashion_seg_torchvision"}
     served = mlflow.pyfunc.load_model(str(tmp_path / "packaged"))
     image = np.random.default_rng(1).integers(0, 255, (48, 64, 3), dtype=np.uint8)
     [prediction] = served.predict(pd.DataFrame({"image": [encode_image(image)]}))

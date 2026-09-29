@@ -77,7 +77,7 @@ def _installed_from(name: str) -> str:
 
 
 def code_dirs(family: ModelFamily) -> list[Path]:
-    """Locate the code bundled in the model: ``fashion_seg`` and the family's package.
+    """Locate the code bundled in the model: ``fashion_seg``, the family's package, its bundles.
 
     Parameters
     ----------
@@ -87,10 +87,11 @@ def code_dirs(family: ModelFamily) -> list[Path]:
     Returns
     -------
     list[Path]
-        The two package directories.
+        The package directories.
     """
-    family_package = importlib.import_module(family.load_predictor.__module__.split(".")[0])
-    return [Path(module.__file__).parent for module in (fashion_seg, family_package)]
+    names = [family.load_predictor.__module__.split(".")[0], *family.SPEC.bundles]
+    packages = [fashion_seg, *(importlib.import_module(name) for name in names)]
+    return [Path(module.__file__).parent for module in packages]
 
 
 def package(
