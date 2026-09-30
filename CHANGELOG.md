@@ -1,3 +1,10 @@
+## v0.8.1 (2026-09-30)
+
+### Fix
+
+- **dvc**: service-account logins to Google Drive
+- **dvc**: address the remote by its folder ID
+
 ## v0.8.0 (2026-09-30)
 
 ### Feat
