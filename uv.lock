@@ -856,7 +856,7 @@ requires-dist = [{ name = "fashion-seg", editable = "packages/fashion-seg" }]
 
 [[package]]
 name = "fashion-seg-train"
-version = "0.7.0"
+version = "0.8.0"
 source = { virtual = "." }
 dependencies = [
     { name = "fashion-seg" },

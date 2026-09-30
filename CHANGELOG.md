@@ -1,3 +1,10 @@
+## v0.8.0 (2026-09-30)
+
+### Feat
+
+- **torchvision**: 4-epoch model, mask mAP 0.264 -> 0.332
+- **torchvision**: train for 4 epochs
+
 ## v0.7.0 (2026-09-29)
 
 ### Feat
