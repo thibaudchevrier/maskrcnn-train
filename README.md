@@ -410,8 +410,10 @@ Testing):
 
 1. Cloud Console → **IAM & Admin → Service accounts → Create**, no roles needed. Open it →
    **Keys → Add key → JSON**.
-2. In Google Drive, share the DVC folder (`1JQNGq5d1GiA8lC_GA-N5v3iQc1X9vHaK`) with the service
-   account's email, as **Viewer** (CI only reads).
+2. In Google Drive, share the DVC folder (`jedha_final_project`, ID
+   `1NnGEuu8GxSrfo7Y6xUQ0TK1veJO9GMVd`, the one `.dvc/config` names) with the service account's
+   email, as **Viewer** (CI only reads). The remote points at this folder by its own ID, so the
+   account needs no access to its parent.
 3. GitHub → repository **Settings → Secrets and variables → Actions → New repository secret**:
    name `GDRIVE_CREDENTIALS_DATA`, value = the whole JSON key file.
 

@@ -94,8 +94,11 @@ jobs:
       - name: Use the service account for the DVC remote
         run: uv run dvc remote modify --local myremote gdrive_use_service_account true
       - name: Pull pipeline inputs and the published model
+        # One target per pull: given these three at once, DVC silently fetches only the first.
         run: |
-          uv run dvc pull deployement.dvc data/imaterialist/label_descriptions.json package_legacy
+          uv run dvc pull deployement.dvc
+          uv run dvc pull data/imaterialist/label_descriptions.json
+          uv run dvc pull package_legacy
       - name: Published model is up to date with code, params and data
         run: |
           status="$(uv run dvc status --json package_legacy)"

@@ -17,7 +17,9 @@ dev = [
     "pre-commit>=4",
     "pydoclint>=0.10.0",
     "pylint>=4.0.9",
-    "pyopenssl>=24.2.1",
+    # DVC's Google Drive remote signs service-account logins with OpenSSL.crypto.sign (PyDrive2 via
+    # oauth2client), removed in pyOpenSSL 24.3; older ones break with recent cryptography.
+    "pyopenssl>=24.2.1,<24.3",
     "pytest>=9.1.1",
     "ruff>=0.16.9",
     "fashion-seg-testing",
