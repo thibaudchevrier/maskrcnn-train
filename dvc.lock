@@ -201,7 +201,7 @@ stages:
         train.torchvision:
           output_dir: outputs/torchvision
           init_weights: weights/maskrcnn_resnet50_fpn_v2_coco.pth
-          epochs: 1
+          epochs: 4
           max_train_images:
           max_val_images: 500
           min_size: 800
@@ -220,11 +220,11 @@ stages:
     outs:
     - path: outputs/torchvision/metrics.json
       hash: md5
-      md5: 08aebf24e4094ee97ca10edb79e5d641
+      md5: 9e119e00ef5aea80bd7adee5036d0d5a
       size: 259
     - path: outputs/torchvision/model
       hash: md5
-      md5: 15956b00faa0d908aa7d01a10decf940.dir
+      md5: f846ae9d5a83cd877e8e412cf1b10653.dir
       size: 184846595
       nfiles: 2
   package_torchvision:
@@ -246,7 +246,7 @@ stages:
       size: 207424
     - path: outputs/torchvision/model
       hash: md5
-      md5: 15956b00faa0d908aa7d01a10decf940.dir
+      md5: f846ae9d5a83cd877e8e412cf1b10653.dir
       size: 184846595
       nfiles: 2
     - path: packages/fashion-seg-torch/src/fashion_seg_torch
@@ -270,7 +270,7 @@ stages:
     outs:
     - path: models/fashion-maskrcnn-torchvision
       hash: md5
-      md5: 297954fe86307e5334c7dc48d7be8881.dir
+      md5: abbcb9d4aef1c994f64bc7c9b7742edd.dir
       size: 185329801
       nfiles: 49
   evaluate_legacy:
@@ -317,7 +317,7 @@ stages:
     deps:
     - path: models/fashion-maskrcnn-torchvision
       hash: md5
-      md5: 297954fe86307e5334c7dc48d7be8881.dir
+      md5: abbcb9d4aef1c994f64bc7c9b7742edd.dir
       size: 185329801
       nfiles: 49
     - path: packages/fashion-seg/src/fashion_seg/scoring.py
@@ -347,5 +347,5 @@ stages:
     outs:
     - path: metrics/evaluate-torchvision.json
       hash: md5
-      md5: ebcec59f3b7ffd2697b8b4d38c5edc72
+      md5: f0b8b5b42df953d577a7e31b0ad11f39
       size: 368
