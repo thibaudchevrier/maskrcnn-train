@@ -425,3 +425,8 @@ Testing):
    CI comments `dvc metrics diff` on the PR.
 4. **Pre-resized images** (a `prepare` output at 1024 px) to speed up data loading.
 5. **Augmentation** for the Matterport trainer (imgaug is unmaintained; needs a compatible substitute).
+
+## License
+
+[MIT](LICENSE). The data (iMaterialist Fashion 2020, Kaggle FGVC7) and the models trained on it follow
+the data's own terms, which target research and non-commercial use.
