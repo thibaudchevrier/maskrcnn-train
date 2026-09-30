@@ -318,11 +318,16 @@ refactored code, checked to give byte-identical responses; they carry those scor
 | Model | Registry version | mask mAP | mask AP50 | box mAP | s / image |
 |-------|------------------|----------|-----------|---------|-----------|
 | 2021 Matterport Mask R-CNN (`legacy`) | 18 | 0.035 | 0.065 | 0.043 | 1.33 (CPU) |
-| torchvision Mask R-CNN v2, 1 epoch (`torchvision`) | 19 | **0.264** | **0.394** | **0.302** | 0.87 (Apple GPU) |
+| torchvision Mask R-CNN v2, 1 epoch | 19 | 0.264 | 0.394 | 0.302 | 0.87 (Apple GPU) |
+| torchvision Mask R-CNN v2, 4 epochs (`torchvision`) | 20 | **0.332** | **0.483** | **0.380** | 0.67 (Apple GPU) |
 
-After one epoch (~5.3 h on an M4 Pro), torchvision is 7.6x better on masks. Large, frequent
-garments score well (dress 0.77, pants 0.76, sleeve 0.67); rare classes and small scattered
-details (rivets, sequins, fringes, tassels) stay near 0.
+After one epoch (~5.3 h on an M4 Pro), torchvision was 7.6x better on masks than the 2021 model.
+Three more epochs (resumed from the first, the cosine schedule restarted over 4; ~16 h) raise mask
+mAP by a quarter, to 9.5x the 2021 model, and improve every class: most for rare garments
+(umbrella 0.05 → 0.46, cape 0 → 0.18, cardigan 0.06 → 0.20). The validation loss flattened at the
+4th epoch (0.711 → 0.710) while the proposal network's objectness loss rose: more epochs of this
+recipe would overfit. Tiny parts stay near 0 (rivet 0.01, sequin 0.01, zipper 0.02, tassel 0):
+they need resolution, not epochs.
 
 ## Model contract
 
@@ -413,7 +418,7 @@ Testing):
 ## Roadmap
 
 1. **Train Mask2Former and YOLO** on the full split and compare them with torchvision.
-2. **More torchvision epochs**, and the rare classes (more data or re-weighting).
+2. **Rare classes and small parts** on torchvision: repeat-factor sampling for rare classes; higher resolution and 16 px anchors for tiny parts (rivets, sequins, zippers).
 3. **Promotion**: mark the best evaluated model `@champion` in the MLflow registry and serve it;
    CI comments `dvc metrics diff` on the PR.
 4. **Pre-resized images** (a `prepare` output at 1024 px) to speed up data loading.

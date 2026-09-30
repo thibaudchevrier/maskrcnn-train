@@ -1,8 +1,8 @@
 {
-  "val_loss_classifier": 0.22082750038802623,
-  "val_loss_box_reg": 0.20738042812794447,
-  "val_loss_mask": 0.18757606974244118,
-  "val_loss_objectness": 0.04966339453868568,
-  "val_loss_rpn_box_reg": 0.09436452325829305,
-  "val_loss": 0.7598119152784347
+  "val_loss_classifier": 0.19935767225176096,
+  "val_loss_box_reg": 0.19410044208168983,
+  "val_loss_mask": 0.17178251382708548,
+  "val_loss_objectness": 0.05482368725247216,
+  "val_loss_rpn_box_reg": 0.08998505697445944,
+  "val_loss": 0.7100493724346161
 }
